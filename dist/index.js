@@ -3409,7 +3409,7 @@ function setupArgoCDCommand() {
 function getApps() {
     return __awaiter(this, void 0, void 0, function* () {
         const url = `https://${ARGOCD_SERVER_URL}/api/v1/applications?fields=items.metadata.name,items.spec.source.path,items.spec.source.repoURL`;
-        console.log(url);
+        core.info(`Fetching apps from: ${url}`);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let responseJson;
         try {
@@ -3426,16 +3426,18 @@ function getApps() {
             // TODO filter apps to only ones where they point to paths that have changed in this repo
             return app.spec.source.repoURL.includes(`${github.context.repo.owner}/${github.context.repo.repo}`);
         });
-        // return responseJson.items as App[];
     });
 }
-function postDiffComment(appName, diff) {
+function postDiffComment(diffs) {
     return __awaiter(this, void 0, void 0, function* () {
-        const output = `            
-  ArgoCD Diff for ${appName}:
+        const output = diffs
+            .map(({ appName, diff }) => `            
+<details><summary>ArgoCD Diff for [\`${appName}\`](https://${ARGOCD_SERVER_URL}/applications/${appName}):</summary>
 \`\`\`diff
 ${diff}
-\`\`\``;
+\`\`\`
+</details>`)
+            .join('\n\n');
         octokit.issues.createComment({
             issue_number: github.context.issue.number,
             owner: github.context.repo.owner,
@@ -3449,23 +3451,23 @@ function run() {
         const argocd = yield setupArgoCDCommand();
         const apps = yield getApps();
         core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
-        // eslint-disable-next-line github/array-foreach
-        apps.forEach((app) => __awaiter(this, void 0, void 0, function* () {
+        const diffPromises = apps.map((app) => __awaiter(this, void 0, void 0, function* () {
             try {
                 const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
                 const res = yield argocd(command);
-                console.log(command);
-                console.log(app.spec.source.repoURL);
-                core.info(res.stdout);
-                core.info(res.stderr);
+                core.info(`Running: argocd ${command}`);
+                core.info(`stdout: ${res.stdout}`);
+                core.info(`stdout: ${res.stderr}`);
                 if (res.stdout) {
-                    yield postDiffComment(app.metadata.name, res.stdout);
+                    return { appName: app.metadata.name, diff: res.stdout };
                 }
             }
             catch (e) {
                 core.info(e);
             }
         }));
+        const diffs = (yield Promise.all(diffPromises)).filter(Boolean);
+        yield postDiffComment(diffs);
     });
 }
 run();
