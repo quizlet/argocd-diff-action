@@ -90,14 +90,19 @@ interface Diff {
 async function postDiffComment(diffs: Diff[]): Promise<void> {
   const output = diffs
     .map(
-      ({ appName, diff }) => `            
-<details><summary>ArgoCD Diff for [\`${appName}\`](https://${ARGOCD_SERVER_URL}/applications/${appName}):</summary>
+      ({ appName, diff }) => `    
+ArgoCD Diff for [\`${appName}\`](https://${ARGOCD_SERVER_URL}/applications/${appName})        
+<details>
+
 \`\`\`diff
 ${diff}
 \`\`\`
-</details>`
+
+</details>
+
+`
     )
-    .join('\n\n');
+    .join('\n');
 
   octokit.issues.createComment({
     issue_number: github.context.issue.number,
