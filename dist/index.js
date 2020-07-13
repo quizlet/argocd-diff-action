@@ -3432,7 +3432,7 @@ function postDiffComment(diffs) {
     return __awaiter(this, void 0, void 0, function* () {
         const output = diffs
             .map(({ appName, diff }) => `            
-<details><summary>ArgoCD Diff for [${appName}](https://${ARGOCD_SERVER_URL}/applications/${appName}):</summary>
+<details><summary>ArgoCD Diff for [\`${appName}\`](https://${ARGOCD_SERVER_URL}/applications/${appName}):</summary>
 \`\`\`diff
 ${diff}
 \`\`\`
