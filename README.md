@@ -1,101 +1,45 @@
-<p align="center">
-  <a href="https://github.com/actions/typescript-action/actions"><img alt="typescript-action status" src="https://github.com/actions/typescript-action/workflows/build-test/badge.svg"></a>
-</p>
+# ArgoCD Diff Github Action
+This action generates a diff between the current PR and the current state of the cluster. 
 
-# Create a JavaScript Action using TypeScript
+Note that this includes any changes between your branch and latest master, as well as ways in which the cluster is out of sync. 
 
-Use this template to bootstrap the creation of a JavaScript action.:rocket:
+# How to use it
 
-This template includes compilication support, tests, a validation workflow, publishing, and versioning guidance.  
+Example GH action:
+```
+name: ArgoCD Diff
 
-If you are new, there's also a simpler introduction.  See the [Hello World JavaScript Action](https://github.com/actions/hello-world-javascript-action)
+on:
+  pull_request:
+    branches: [ master ]
 
-## Create an action from this template
+jobs:
+  argocd-diff:
+    name: Generate ArgoCD Diff
+    runs-on: ubuntu-latest
+    steps:
 
-Click the `Use this Template` and provide the new repo details for your action
+      - name: Checkout repo
+        uses: actions/checkout@v2
 
-## Code in Master
-
-Install the dependencies  
-```bash
-$ npm install
+      - uses: quizlet/argocd-diff-action@master
+        name: ArgoCD Diff
+        with:
+          argocd-server-url: argocd.example.com
+          argocd-token: ${{ secrets.ARGOCD_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          argocd-version: v1.6.1
 ```
 
-Build the typescript and package it for distribution
-```bash
-$ npm run build && npm run pack
-```
+# How it works
+1) Downloads the specified version of the ArgoCD binary, and makes it executable
+2) Connects to the ArgoCD api using the argocd token, and gets all the apps
+3) Filters the apps to the ones that live in the current repo
+3) Runs `argocd app diff` for each app
+5) Posts the diff output as a comment on the PR
 
-Run the tests :heavy_check_mark:  
-```bash
-$ npm test
+# Publishing
+Build the script and commit to your branch:
+`npm run build && npm run pack`
+Commit the build output, and make a PR
 
- PASS  ./index.test.js
-  ✓ throws invalid number (3ms)
-  ✓ wait 500 ms (504ms)
-  ✓ test runs (95ms)
-
-...
-```
-
-## Change action.yml
-
-The action.yml contains defines the inputs and output for your action.
-
-Update the action.yml with your name, description, inputs and outputs for your action.
-
-See the [documentation](https://help.github.com/en/articles/metadata-syntax-for-github-actions)
-
-## Change the Code
-
-Most toolkit and CI/CD operations involve async operations so the action is run in an async function.
-
-```javascript
-import * as core from '@actions/core';
-...
-
-async function run() {
-  try { 
-      ...
-  } 
-  catch (error) {
-    core.setFailed(error.message);
-  }
-}
-
-run()
-```
-
-See the [toolkit documentation](https://github.com/actions/toolkit/blob/master/README.md#packages) for the various packages.
-
-## Publish to a distribution branch
-
-Actions are run from GitHub repos so we will checkin the packed dist folder. 
-
-Then run [ncc](https://github.com/zeit/ncc) and push the results:
-```bash
-$ npm run pack
-$ git add dist
-$ git commit -a -m "prod dependencies"
-$ git push origin releases/v1
-```
-
-Your action is now published! :rocket: 
-
-See the [versioning documentation](https://github.com/actions/toolkit/blob/master/docs/action-versioning.md)
-
-## Validate
-
-You can now validate the action by referencing `./` in a workflow in your repo (see [test.yml](.github/workflows/test.yml)])
-
-```yaml
-uses: ./
-with:
-  milliseconds: 1000
-```
-
-See the [actions tab](https://github.com/actions/javascript-action/actions) for runs of this action! :rocket:
-
-## Usage:
-
-After testing you can [create a v1 tag](https://github.com/actions/toolkit/blob/master/docs/action-versioning.md) to reference the stable and latest V1 action
