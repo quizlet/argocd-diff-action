@@ -29,6 +29,7 @@ jobs:
           argocd-token: ${{ secrets.ARGOCD_TOKEN }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           argocd-version: v1.6.1
+          argocd-extra-cli-args: --grpc-web
 ```
 
 # How it works
