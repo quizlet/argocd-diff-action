@@ -77,6 +77,7 @@ async function getApps(): Promise<App[]> {
     core.error(e);
   }
   return (responseJson.items as App[]).filter(app => {
+    core.info(JSON.stringify(app.spec));
     // TODO filter apps to only ones where they point to paths that have changed in this repo
     return app.spec.source.repoURL.includes(
       `${github.context.repo.owner}/${github.context.repo.repo}`
@@ -94,7 +95,7 @@ async function postDiffComment(diffs: Diff[]): Promise<void> {
   const commitLink = `https://github.com/${owner}/${repo}/commits/${github.context.sha}`;
   const shortCommitSha = String(github.context.sha).substr(0, 7);
   const output = `
-ArgoCD Diff for ([\`${shortCommitSha}\`](${commitLink})
+ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
   ${diffs
     .map(
       ({ appName, diff }) => `    
