@@ -160,13 +160,17 @@ async function run(): Promise<void> {
   const argocd = await setupArgoCDCommand();
   const apps = await getApps();
   core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
+  const workDir = (await execCommand('pwd')).stdout;
 
   const diffPromises = apps.map(async app => {
     try {
       const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
       if (app.spec.source.helm) {
-        const output = await execCommand(`cd ${app.spec.source.path} && helm repo update`);
-        core.info(`output: ${output.stdout}`);
+        const output = await execCommand(
+          `cd ${workDir}/${app.spec.source.path} && helm repo update`
+        );
+        core.info(`output: ${JSON.stringify(output.stdout)}`);
+        await execCommand(`cd ${workDir}`);
       }
       const res = await argocd(command);
       core.info(`Running: argocd ${command}`);

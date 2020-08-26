@@ -3479,12 +3479,14 @@ function run() {
         const argocd = yield setupArgoCDCommand();
         const apps = yield getApps();
         core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
+        const workDir = (yield execCommand('pwd')).stdout;
         const diffPromises = apps.map((app) => __awaiter(this, void 0, void 0, function* () {
             try {
                 const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
                 if (app.spec.source.helm) {
-                    const output = yield execCommand(`cd ${app.spec.source.path} && helm repo update`);
-                    core.info(`output: ${output.stdout}`);
+                    const output = yield execCommand(`cd ${workDir}/${app.spec.source.path} && helm repo update`);
+                    core.info(`output: ${JSON.stringify(output.stdout)}`);
+                    yield execCommand(`cd ${workDir}`);
                 }
                 const res = yield argocd(command);
                 core.info(`Running: argocd ${command}`);
