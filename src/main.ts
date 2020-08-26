@@ -89,20 +89,12 @@ async function getApps(): Promise<App[]> {
   } catch (e) {
     core.error(e);
   }
-  core.info(
-    `github.context.payload.pull_request?.head?: ${JSON.stringify(
-      github.context.payload.pull_request?.head
-    )}`
-  );
+
   return (responseJson.items as App[]).filter(app => {
-    core.info(JSON.stringify(app));
-    core.info(`app.spec.source.targetRevision: ${app.spec.source.targetRevision}`);
     return (
       app.spec.source.repoURL.includes(
         `${github.context.repo.owner}/${github.context.repo.repo}`
-      ) &&
-      (app.spec.source.targetRevision === 'master' ||
-        app.spec.source.targetRevision === github.context.payload.pull_request?.head?.ref)
+      ) && app.spec.source.targetRevision === 'master'
     );
   });
 }
@@ -122,7 +114,7 @@ async function postDiffComment(diffs: Diff[]): Promise<void> {
     ({ app, diff }) => `    
 Diff for App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applications/${
       app.metadata.name
-    }) ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️'}
+    }) App sync status: ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️'}
 <details>
 
 \`\`\`diff
@@ -133,6 +125,7 @@ ${diff}
 
 `
   );
+
   const output = `
 ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
   ${diffOutput.join('\n')}
@@ -171,6 +164,12 @@ async function run(): Promise<void> {
   const diffPromises = apps.map(async app => {
     try {
       const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
+      if (app.spec.source.helm) {
+        const pwd = await execCommand(`pwd`);
+        core.info(`pwd: ${pwd}`);
+        const output = await execCommand(`cd ${app.spec.source.path} && ls -al`);
+        core.info(`output: ${output}`);
+      }
       const res = await argocd(command);
       core.info(`Running: argocd ${command}`);
       core.info(`stdout: ${res.stdout}`);

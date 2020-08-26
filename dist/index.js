@@ -3408,7 +3408,6 @@ function setupArgoCDCommand() {
     });
 }
 function getApps() {
-    var _a;
     return __awaiter(this, void 0, void 0, function* () {
         const url = `https://${ARGOCD_SERVER_URL}/api/v1/applications?fields=items.metadata.name,items.spec.source.path,items.spec.source.repoURL,items.spec.source.targetRevision,items.spec.source.helm,items.spec.source.kustomize,items.status.sync.status`;
         core.info(`Fetching apps from: ${url}`);
@@ -3424,14 +3423,8 @@ function getApps() {
         catch (e) {
             core.error(e);
         }
-        core.info(`github.context.payload.pull_request?.head?: ${JSON.stringify((_a = github.context.payload.pull_request) === null || _a === void 0 ? void 0 : _a.head)}`);
         return responseJson.items.filter(app => {
-            var _a, _b;
-            core.info(JSON.stringify(app));
-            core.info(`app.spec.source.targetRevision: ${app.spec.source.targetRevision}`);
-            return (app.spec.source.repoURL.includes(`${github.context.repo.owner}/${github.context.repo.repo}`) &&
-                (app.spec.source.targetRevision === 'master' ||
-                    app.spec.source.targetRevision === ((_b = (_a = github.context.payload.pull_request) === null || _a === void 0 ? void 0 : _a.head) === null || _b === void 0 ? void 0 : _b.ref)));
+            return (app.spec.source.repoURL.includes(`${github.context.repo.owner}/${github.context.repo.repo}`) && app.spec.source.targetRevision === 'master');
         });
     });
 }
@@ -3443,7 +3436,7 @@ function postDiffComment(diffs) {
         const commitLink = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`;
         const shortCommitSha = String(sha).substr(0, 7);
         const diffOutput = diffs.map(({ app, diff }) => `    
-Diff for App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applications/${app.metadata.name}) ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️'}
+Diff for App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applications/${app.metadata.name}) App sync status: ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️'}
 <details>
 
 \`\`\`diff
@@ -3489,6 +3482,12 @@ function run() {
         const diffPromises = apps.map((app) => __awaiter(this, void 0, void 0, function* () {
             try {
                 const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
+                if (app.spec.source.helm) {
+                    const pwd = yield execCommand(`pwd`);
+                    core.info(`pwd: ${pwd}`);
+                    const output = yield execCommand(`cd ${app.spec.source.path} && ls -al`);
+                    core.info(`output: ${output}`);
+                }
                 const res = yield argocd(command);
                 core.info(`Running: argocd ${command}`);
                 core.info(`stdout: ${res.stdout}`);
