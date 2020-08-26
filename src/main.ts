@@ -25,7 +25,7 @@ interface App {
   };
   status: {
     sync: {
-      status: string;
+      status: 'OutOfSync' | 'Synced';
     };
   };
 }
@@ -115,14 +115,14 @@ async function postDiffComment(diffs: Diff[]): Promise<void> {
   const { owner, repo } = github.context.repo;
   const sha = github.context.payload.pull_request?.head?.sha;
 
-  const commitLink = `https://github.com/${owner}/${repo}/commits/${sha}`;
+  const commitLink = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`;
   const shortCommitSha = String(sha).substr(0, 7);
-  const output = `
-ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
-  ${diffs
-    .map(
-      ({ app, diff }) => `    
-Diff for App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applications/${app.metadata.name}) 
+
+  const diffOutput = diffs.map(
+    ({ app, diff }) => `    
+Diff for App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applications/${
+      app.metadata.name
+    }) ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️'}
 <details>
 
 \`\`\`diff
@@ -132,8 +132,10 @@ ${diff}
 </details>
 
 `
-    )
-    .join('\n')}
+  );
+  const output = `
+ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
+  ${diffOutput.join('\n')}
 `;
 
   const commentsResponse = await octokit.issues.listComments({
