@@ -190,6 +190,13 @@ async function run(): Promise<void> {
 
   await asyncForEach(apps, async app => {
     try {
+      if (app.spec.source.helm) {
+        const output1 = await execCommand(
+          `cd ${workDir}/${app.spec.source.path} && pwd && helm dependency update`
+        );
+        core.info(`stdout: ${JSON.stringify(output1.stdout)}`);
+        core.error(`stderr: ${JSON.stringify(output1.stderr)}`);
+      }
       const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
       const res = await argocd(command);
       core.info(`Running: argocd ${command}`);
