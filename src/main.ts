@@ -166,10 +166,10 @@ async function run(): Promise<void> {
     try {
       const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
       if (app.spec.source.helm) {
-        const output = await execCommand(
-          `cd ${workDir}/${app.spec.source.path} && helm repo update`
-        );
-        core.info(`output: ${JSON.stringify(output.stdout)}`);
+        const output1 = await execCommand(`cd ${workDir}/${app.spec.source.path}`);
+        core.info(`output: ${JSON.stringify(output1.stdout)}`);
+        const output2 = await execCommand(`pwd && helm repo update`);
+        core.info(`output: ${JSON.stringify(output2.stdout)}`);
         await execCommand(`cd ${workDir}`);
       }
       const res = await argocd(command);
