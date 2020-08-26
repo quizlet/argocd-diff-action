@@ -158,6 +158,8 @@ ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
 
 async function run(): Promise<void> {
   const argocd = await setupArgoCDCommand();
+  const res = await execCommand(`which helm`);
+  core.info(`which helm ${res.stdout}`);
   const apps = await getApps();
   core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
 

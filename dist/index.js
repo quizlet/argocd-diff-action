@@ -3477,6 +3477,8 @@ ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         const argocd = yield setupArgoCDCommand();
+        const res = yield execCommand(`which helm`);
+        core.info(`which helm ${res.stdout}`);
         const apps = yield getApps();
         core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
         const diffPromises = apps.map((app) => __awaiter(this, void 0, void 0, function* () {
