@@ -3426,7 +3426,9 @@ function getApps() {
         return responseJson.items.filter(app => {
             core.info(JSON.stringify(app.spec));
             // TODO filter apps to only ones where they point to paths that have changed in this repo
-            return app.spec.source.repoURL.includes(`${github.context.repo.owner}/${github.context.repo.repo}`);
+            return (app.spec.source.repoURL.includes(`${github.context.repo.owner}/${github.context.repo.repo}`) &&
+                (app.spec.source.targetRevision === 'master' ||
+                    app.spec.source.targetRevision === github.context.ref));
         });
     });
 }
