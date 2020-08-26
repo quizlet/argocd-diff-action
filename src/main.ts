@@ -14,7 +14,15 @@ interface ExecResult {
 
 interface App {
   metadata: { name: string };
-  spec: { source: { repoURL: string; path: string } };
+  spec: {
+    source: {
+      repoURL: string;
+      path: string;
+      targetRevision: string;
+      kustomize: Object;
+      helm: Object;
+    };
+  };
 }
 const ARCH = process.env.ARCH || 'linux';
 const githubToken = core.getInput('github-token');
@@ -63,7 +71,7 @@ async function setupArgoCDCommand(): Promise<(params: string) => Promise<ExecRes
 }
 
 async function getApps(): Promise<App[]> {
-  const url = `https://${ARGOCD_SERVER_URL}/api/v1/applications?fields=items.metadata.name,items.spec.source.path,items.spec.source.repoURL`;
+  const url = `https://${ARGOCD_SERVER_URL}/api/v1/applications?fields=items.metadata.name,items.spec.source.path,items.spec.source.repoURL,items.spec.source.targetRevision,items.spec.source.helm,items.spec.source.kustomize`;
   core.info(`Fetching apps from: ${url}`);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let responseJson: any;

@@ -3409,7 +3409,7 @@ function setupArgoCDCommand() {
 }
 function getApps() {
     return __awaiter(this, void 0, void 0, function* () {
-        const url = `https://${ARGOCD_SERVER_URL}/api/v1/applications?fields=items.metadata.name,items.spec.source.path,items.spec.source.repoURL`;
+        const url = `https://${ARGOCD_SERVER_URL}/api/v1/applications?fields=items.metadata.name,items.spec.source.path,items.spec.source.repoURL,items.spec.source.targetRevision,items.spec.source.helm,items.spec.source.kustomize`;
         core.info(`Fetching apps from: ${url}`);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let responseJson;
