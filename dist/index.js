@@ -3492,14 +3492,16 @@ function run() {
                 if (app.spec.source.helm) {
                     const output1 = yield execCommand(`cd ${workDir}/${app.spec.source.path}`);
                     core.info(`output: ${JSON.stringify(output1.stdout)}`);
-                    const output2 = yield execCommand(`pwd && helm repo update`);
-                    core.info(`output: ${JSON.stringify(output2.stdout)}`);
+                    const output2 = yield execCommand(`pwd`);
+                    core.info(`output2: ${JSON.stringify(output2.stdout)}`);
+                    const output3 = yield execCommand(`helm repo update`);
+                    core.info(`output3: ${JSON.stringify(output3.stdout)}`);
                     // Return to where we started
                     yield execCommand(`cd ${workDir}`);
                 }
             }
             catch (e) {
-                core.info(`Error: ${e.toString()}`);
+                core.info(`Error: ${JSON.stringify(e)}`);
             }
         }));
         const diffPromises = apps.map((app) => __awaiter(this, void 0, void 0, function* () {

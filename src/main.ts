@@ -176,13 +176,15 @@ async function run(): Promise<void> {
       if (app.spec.source.helm) {
         const output1 = await execCommand(`cd ${workDir}/${app.spec.source.path}`);
         core.info(`output: ${JSON.stringify(output1.stdout)}`);
-        const output2 = await execCommand(`pwd && helm repo update`);
-        core.info(`output: ${JSON.stringify(output2.stdout)}`);
+        const output2 = await execCommand(`pwd`);
+        core.info(`output2: ${JSON.stringify(output2.stdout)}`);
+        const output3 = await execCommand(`helm repo update`);
+        core.info(`output3: ${JSON.stringify(output3.stdout)}`);
         // Return to where we started
         await execCommand(`cd ${workDir}`);
       }
     } catch (e) {
-      core.info(`Error: ${e.toString()}`);
+      core.info(`Error: ${JSON.stringify(e)}`);
     }
   });
 
