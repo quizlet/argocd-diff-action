@@ -23,6 +23,11 @@ interface App {
       helm: Object;
     };
   };
+  status: {
+    sync: {
+      status: string;
+    };
+  };
 }
 const ARCH = process.env.ARCH || 'linux';
 const githubToken = core.getInput('github-token');
@@ -71,7 +76,7 @@ async function setupArgoCDCommand(): Promise<(params: string) => Promise<ExecRes
 }
 
 async function getApps(): Promise<App[]> {
-  const url = `https://${ARGOCD_SERVER_URL}/api/v1/applications?fields=items.metadata.name,items.spec.source.path,items.spec.source.repoURL,items.spec.source.targetRevision,items.spec.source.helm,items.spec.source.kustomize`;
+  const url = `https://${ARGOCD_SERVER_URL}/api/v1/applications?fields=items.metadata.name,items.spec.source.path,items.spec.source.repoURL,items.spec.source.targetRevision,items.spec.source.helm,items.spec.source.kustomize,items.status.sync.status`;
   core.info(`Fetching apps from: ${url}`);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let responseJson: any;
@@ -84,34 +89,40 @@ async function getApps(): Promise<App[]> {
   } catch (e) {
     core.error(e);
   }
-  core.info(`github.context.head_ref: ${JSON.stringify(github.context)}`);
+  core.info(
+    `github.context.payload.pull_request?.head?: ${JSON.stringify(
+      github.context.payload.pull_request?.head
+    )}`
+  );
   return (responseJson.items as App[]).filter(app => {
+    core.info(JSON.stringify(app));
     core.info(`app.spec.source.targetRevision: ${app.spec.source.targetRevision}`);
     return (
       app.spec.source.repoURL.includes(
         `${github.context.repo.owner}/${github.context.repo.repo}`
       ) &&
       (app.spec.source.targetRevision === 'master' ||
-        app.spec.source.targetRevision === github.context.ref)
+        app.spec.source.targetRevision === github.context.payload.pull_request?.head?.ref)
     );
   });
 }
 
 interface Diff {
-  appName: string;
+  app: App;
   diff: string;
 }
 async function postDiffComment(diffs: Diff[]): Promise<void> {
   const { owner, repo } = github.context.repo;
+  const sha = github.context.payload.pull_request?.head?.sha;
 
-  const commitLink = `https://github.com/${owner}/${repo}/commits/${github.context.sha}`;
-  const shortCommitSha = String(github.context.sha).substr(0, 7);
+  const commitLink = `https://github.com/${owner}/${repo}/commits/${sha}`;
+  const shortCommitSha = String(sha).substr(0, 7);
   const output = `
 ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
   ${diffs
     .map(
-      ({ appName, diff }) => `    
-Diff for App: [\`${appName}\`](https://${ARGOCD_SERVER_URL}/applications/${appName}) 
+      ({ app, diff }) => `    
+Diff for App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applications/${app.metadata.name}) 
 <details>
 
 \`\`\`diff
@@ -163,7 +174,7 @@ async function run(): Promise<void> {
       core.info(`stdout: ${res.stdout}`);
       core.info(`stdout: ${res.stderr}`);
       if (res.stdout) {
-        return { appName: app.metadata.name, diff: res.stdout };
+        return { app, diff: res.stdout };
       }
     } catch (e) {
       core.info(e);
