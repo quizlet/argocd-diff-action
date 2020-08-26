@@ -14,7 +14,20 @@ interface ExecResult {
 
 interface App {
   metadata: { name: string };
-  spec: { source: { repoURL: string; path: string } };
+  spec: {
+    source: {
+      repoURL: string;
+      path: string;
+      targetRevision: string;
+      kustomize: Object;
+      helm: Object;
+    };
+  };
+  status: {
+    sync: {
+      status: 'OutOfSync' | 'Synced';
+    };
+  };
 }
 const ARCH = process.env.ARCH || 'linux';
 const githubToken = core.getInput('github-token');
@@ -63,7 +76,7 @@ async function setupArgoCDCommand(): Promise<(params: string) => Promise<ExecRes
 }
 
 async function getApps(): Promise<App[]> {
-  const url = `https://${ARGOCD_SERVER_URL}/api/v1/applications?fields=items.metadata.name,items.spec.source.path,items.spec.source.repoURL`;
+  const url = `https://${ARGOCD_SERVER_URL}/api/v1/applications?fields=items.metadata.name,items.spec.source.path,items.spec.source.repoURL,items.spec.source.targetRevision,items.spec.source.helm,items.spec.source.kustomize,items.status.sync.status`;
   core.info(`Fetching apps from: ${url}`);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let responseJson: any;
@@ -76,23 +89,32 @@ async function getApps(): Promise<App[]> {
   } catch (e) {
     core.error(e);
   }
+
   return (responseJson.items as App[]).filter(app => {
-    // TODO filter apps to only ones where they point to paths that have changed in this repo
-    return app.spec.source.repoURL.includes(
-      `${github.context.repo.owner}/${github.context.repo.repo}`
+    return (
+      app.spec.source.repoURL.includes(
+        `${github.context.repo.owner}/${github.context.repo.repo}`
+      ) && app.spec.source.targetRevision === 'master'
     );
   });
 }
 
 interface Diff {
-  appName: string;
+  app: App;
   diff: string;
 }
 async function postDiffComment(diffs: Diff[]): Promise<void> {
-  const output = diffs
-    .map(
-      ({ appName, diff }) => `    
-ArgoCD Diff for [\`${appName}\`](https://${ARGOCD_SERVER_URL}/applications/${appName})        
+  const { owner, repo } = github.context.repo;
+  const sha = github.context.payload.pull_request?.head?.sha;
+
+  const commitLink = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`;
+  const shortCommitSha = String(sha).substr(0, 7);
+
+  const diffOutput = diffs.map(
+    ({ app, diff }) => `    
+Diff for App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applications/${
+      app.metadata.name
+    }) App sync status: ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️'}
 <details>
 
 \`\`\`diff
@@ -102,15 +124,36 @@ ${diff}
 </details>
 
 `
-    )
-    .join('\n');
+  );
 
-  octokit.issues.createComment({
+  const output = `
+ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
+  ${diffOutput.join('\n')}
+`;
+
+  const commentsResponse = await octokit.issues.listComments({
     issue_number: github.context.issue.number,
-    owner: github.context.repo.owner,
-    repo: github.context.repo.repo,
-    body: output
+    owner,
+    repo
   });
+
+  const existingComment = commentsResponse.data.find(d => d.body.includes('ArgoCD Diff for'));
+
+  if (existingComment) {
+    octokit.issues.updateComment({
+      owner,
+      repo,
+      comment_id: existingComment.id,
+      body: output
+    });
+  } else {
+    octokit.issues.createComment({
+      issue_number: github.context.issue.number,
+      owner,
+      repo,
+      body: output
+    });
+  }
 }
 
 async function run(): Promise<void> {
@@ -121,12 +164,18 @@ async function run(): Promise<void> {
   const diffPromises = apps.map(async app => {
     try {
       const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
+      if (app.spec.source.helm) {
+        const pwd = await execCommand(`pwd`);
+        core.info(`pwd: ${pwd.stdout}`);
+        const output = await execCommand(`cd ${app.spec.source.path} && ls -al`);
+        core.info(`output: ${output.stdout}`);
+      }
       const res = await argocd(command);
       core.info(`Running: argocd ${command}`);
       core.info(`stdout: ${res.stdout}`);
       core.info(`stdout: ${res.stderr}`);
       if (res.stdout) {
-        return { appName: app.metadata.name, diff: res.stdout };
+        return { app, diff: res.stdout };
       }
     } catch (e) {
       core.info(e);

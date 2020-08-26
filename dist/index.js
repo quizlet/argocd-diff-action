@@ -3375,6 +3375,7 @@ core.info(githubToken);
 const ARGOCD_SERVER_URL = core.getInput('argocd-server-url');
 const ARGOCD_TOKEN = core.getInput('argocd-token');
 const VERSION = core.getInput('argocd-version');
+const EXTRA_CLI_ARGS = core.getInput('argocd-extra-cli-args');
 const octokit = github.getOctokit(githubToken);
 function execCommand(command, failingExitCode = 1) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -3402,13 +3403,13 @@ function setupArgoCDCommand() {
         fs.chmodSync(path.join(argoBinaryPath), '755');
         core.addPath(argoBinaryPath);
         return (params) => __awaiter(this, void 0, void 0, function* () {
-            return execCommand(`${argoBinaryPath} ${params} --grpc-web --auth-token=${ARGOCD_TOKEN} --server=${ARGOCD_SERVER_URL}`, 2);
+            return execCommand(`${argoBinaryPath} ${params} --auth-token=${ARGOCD_TOKEN} --server=${ARGOCD_SERVER_URL} ${EXTRA_CLI_ARGS}`, 2);
         });
     });
 }
 function getApps() {
     return __awaiter(this, void 0, void 0, function* () {
-        const url = `https://${ARGOCD_SERVER_URL}/api/v1/applications?fields=items.metadata.name,items.spec.source.path,items.spec.source.repoURL`;
+        const url = `https://${ARGOCD_SERVER_URL}/api/v1/applications?fields=items.metadata.name,items.spec.source.path,items.spec.source.repoURL,items.spec.source.targetRevision,items.spec.source.helm,items.spec.source.kustomize,items.status.sync.status`;
         core.info(`Fetching apps from: ${url}`);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let responseJson;
@@ -3423,16 +3424,19 @@ function getApps() {
             core.error(e);
         }
         return responseJson.items.filter(app => {
-            // TODO filter apps to only ones where they point to paths that have changed in this repo
-            return app.spec.source.repoURL.includes(`${github.context.repo.owner}/${github.context.repo.repo}`);
+            return (app.spec.source.repoURL.includes(`${github.context.repo.owner}/${github.context.repo.repo}`) && app.spec.source.targetRevision === 'master');
         });
     });
 }
 function postDiffComment(diffs) {
+    var _a, _b;
     return __awaiter(this, void 0, void 0, function* () {
-        const output = diffs
-            .map(({ appName, diff }) => `    
-ArgoCD Diff for [\`${appName}\`](https://${ARGOCD_SERVER_URL}/applications/${appName})        
+        const { owner, repo } = github.context.repo;
+        const sha = (_b = (_a = github.context.payload.pull_request) === null || _a === void 0 ? void 0 : _a.head) === null || _b === void 0 ? void 0 : _b.sha;
+        const commitLink = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`;
+        const shortCommitSha = String(sha).substr(0, 7);
+        const diffOutput = diffs.map(({ app, diff }) => `    
+Diff for App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applications/${app.metadata.name}) App sync status: ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️'}
 <details>
 
 \`\`\`diff
@@ -3441,14 +3445,33 @@ ${diff}
 
 </details>
 
-`)
-            .join('\n');
-        octokit.issues.createComment({
+`);
+        const output = `
+ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
+  ${diffOutput.join('\n')}
+`;
+        const commentsResponse = yield octokit.issues.listComments({
             issue_number: github.context.issue.number,
-            owner: github.context.repo.owner,
-            repo: github.context.repo.repo,
-            body: output
+            owner,
+            repo
         });
+        const existingComment = commentsResponse.data.find(d => d.body.includes('ArgoCD Diff for'));
+        if (existingComment) {
+            octokit.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existingComment.id,
+                body: output
+            });
+        }
+        else {
+            octokit.issues.createComment({
+                issue_number: github.context.issue.number,
+                owner,
+                repo,
+                body: output
+            });
+        }
     });
 }
 function run() {
@@ -3459,12 +3482,18 @@ function run() {
         const diffPromises = apps.map((app) => __awaiter(this, void 0, void 0, function* () {
             try {
                 const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
+                if (app.spec.source.helm) {
+                    const pwd = yield execCommand(`pwd`);
+                    core.info(`pwd: ${pwd.stdout}`);
+                    const output = yield execCommand(`cd ${app.spec.source.path} && ls -al`);
+                    core.info(`output: ${output.stdout}`);
+                }
                 const res = yield argocd(command);
                 core.info(`Running: argocd ${command}`);
                 core.info(`stdout: ${res.stdout}`);
                 core.info(`stdout: ${res.stderr}`);
                 if (res.stdout) {
-                    return { appName: app.metadata.name, diff: res.stdout };
+                    return { app, diff: res.stdout };
                 }
             }
             catch (e) {
