@@ -3477,17 +3477,13 @@ ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         const argocd = yield setupArgoCDCommand();
-        const res = yield execCommand(`which helm`);
-        core.info(`which helm ${res.stdout}`);
         const apps = yield getApps();
         core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
         const diffPromises = apps.map((app) => __awaiter(this, void 0, void 0, function* () {
             try {
                 const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
                 if (app.spec.source.helm) {
-                    const pwd = yield execCommand(`pwd`);
-                    core.info(`pwd: ${pwd.stdout}`);
-                    const output = yield execCommand(`cd ${app.spec.source.path} && ls -al`);
+                    const output = yield execCommand(`cd ${app.spec.source.path} && helm repo update`);
                     core.info(`output: ${output.stdout}`);
                 }
                 const res = yield argocd(command);
