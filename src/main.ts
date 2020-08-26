@@ -178,7 +178,7 @@ async function run(): Promise<void> {
         core.info(`output: ${JSON.stringify(output1.stdout)}`);
         const output2 = await execCommand(`pwd`);
         core.info(`output2: ${JSON.stringify(output2.stdout)}`);
-        const output3 = await execCommand(`helm repo update`);
+        const output3 = await execCommand(`helm dependency update`);
         core.info(`output3: ${JSON.stringify(output3.stdout)}`);
         // Return to where we started
         await execCommand(`cd ${workDir}`);

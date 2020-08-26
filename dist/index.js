@@ -3494,7 +3494,7 @@ function run() {
                     core.info(`output: ${JSON.stringify(output1.stdout)}`);
                     const output2 = yield execCommand(`pwd`);
                     core.info(`output2: ${JSON.stringify(output2.stdout)}`);
-                    const output3 = yield execCommand(`helm repo update`);
+                    const output3 = yield execCommand(`helm dependency update`);
                     core.info(`output3: ${JSON.stringify(output3.stdout)}`);
                     // Return to where we started
                     yield execCommand(`cd ${workDir}`);
