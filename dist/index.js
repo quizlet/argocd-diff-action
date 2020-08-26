@@ -3474,22 +3474,32 @@ ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
         }
     });
 }
+function asyncForEach(array, callback) {
+    return __awaiter(this, void 0, void 0, function* () {
+        for (let index = 0; index < array.length; index++) {
+            yield callback(array[index], index, array);
+        }
+    });
+}
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         const argocd = yield setupArgoCDCommand();
         const apps = yield getApps();
         core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
         const workDir = (yield execCommand('pwd')).stdout;
+        asyncForEach(apps, (app) => __awaiter(this, void 0, void 0, function* () {
+            if (app.spec.source.helm) {
+                const output1 = yield execCommand(`cd ${workDir}/${app.spec.source.path}`);
+                core.info(`output: ${JSON.stringify(output1.stdout)}`);
+                const output2 = yield execCommand(`pwd && helm repo update`);
+                core.info(`output: ${JSON.stringify(output2.stdout)}`);
+                // Return to where we started
+                yield execCommand(`cd ${workDir}`);
+            }
+        }));
         const diffPromises = apps.map((app) => __awaiter(this, void 0, void 0, function* () {
             try {
                 const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
-                if (app.spec.source.helm) {
-                    const output1 = yield execCommand(`cd ${workDir}/${app.spec.source.path}`);
-                    core.info(`output: ${JSON.stringify(output1.stdout)}`);
-                    const output2 = yield execCommand(`pwd && helm repo update`);
-                    core.info(`output: ${JSON.stringify(output2.stdout)}`);
-                    yield execCommand(`cd ${workDir}`);
-                }
                 const res = yield argocd(command);
                 core.info(`Running: argocd ${command}`);
                 core.info(`stdout: ${res.stdout}`);

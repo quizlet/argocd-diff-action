@@ -156,22 +156,35 @@ ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
   }
 }
 
+async function asyncForEach<T>(
+  array: T[],
+  callback: (item: T, i: number, arr: T[]) => Promise<void>
+): Promise<void> {
+  for (let index = 0; index < array.length; index++) {
+    await callback(array[index], index, array);
+  }
+}
+
 async function run(): Promise<void> {
   const argocd = await setupArgoCDCommand();
   const apps = await getApps();
   core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
   const workDir = (await execCommand('pwd')).stdout;
 
+  asyncForEach(apps, async app => {
+    if (app.spec.source.helm) {
+      const output1 = await execCommand(`cd ${workDir}/${app.spec.source.path}`);
+      core.info(`output: ${JSON.stringify(output1.stdout)}`);
+      const output2 = await execCommand(`pwd && helm repo update`);
+      core.info(`output: ${JSON.stringify(output2.stdout)}`);
+      // Return to where we started
+      await execCommand(`cd ${workDir}`);
+    }
+  });
+
   const diffPromises = apps.map(async app => {
     try {
       const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
-      if (app.spec.source.helm) {
-        const output1 = await execCommand(`cd ${workDir}/${app.spec.source.path}`);
-        core.info(`output: ${JSON.stringify(output1.stdout)}`);
-        const output2 = await execCommand(`pwd && helm repo update`);
-        core.info(`output: ${JSON.stringify(output2.stdout)}`);
-        await execCommand(`cd ${workDir}`);
-      }
       const res = await argocd(command);
       core.info(`Running: argocd ${command}`);
       core.info(`stdout: ${res.stdout}`);
