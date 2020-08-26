@@ -86,7 +86,8 @@ async function getApps(): Promise<App[]> {
   }
   return (responseJson.items as App[]).filter(app => {
     // TODO filter apps to only ones where they point to paths that have changed in this repo
-    core.info(`github.context.ref: ${github.context.ref}`);
+    // @ts-ignore
+    core.info(`github.context.head_ref: ${github.context.head_ref}`);
     core.info(`app.spec.source.targetRevision: ${app.spec.source.targetRevision}`);
     return (
       app.spec.source.repoURL.includes(
