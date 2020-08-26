@@ -3484,9 +3484,9 @@ function run() {
                 const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
                 if (app.spec.source.helm) {
                     const pwd = yield execCommand(`pwd`);
-                    core.info(`pwd: ${pwd}`);
+                    core.info(`pwd: ${pwd.stdout}`);
                     const output = yield execCommand(`cd ${app.spec.source.path} && ls -al`);
-                    core.info(`output: ${output}`);
+                    core.info(`output: ${output.stdout}`);
                 }
                 const res = yield argocd(command);
                 core.info(`Running: argocd ${command}`);
