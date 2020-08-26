@@ -171,22 +171,24 @@ async function run(): Promise<void> {
   core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
   const workDir = (await execCommand('pwd')).stdout;
 
-  await asyncForEach(apps, async app => {
-    try {
-      if (app.spec.source.helm) {
-        const output1 = await execCommand(
-          `cd ${workDir}/${app.spec.source.path} && pwd && helm dependency update`
-        );
-        core.info(`output: ${JSON.stringify(output1.stdout)}`);
-        // Return to where we started
-        await execCommand(`cd ${workDir}`);
-      }
-    } catch (e) {
-      core.info(`Error: ${JSON.stringify(e)}`);
-    }
-  });
+  // await asyncForEach(apps, async app => {
+  //   try {
+  //     if (app.spec.source.helm) {
+  //       const output1 = await execCommand(
+  //         `cd ${workDir}/${app.spec.source.path} && pwd && helm dependency update`
+  //       );
+  //       core.info(`output: ${JSON.stringify(output1.stdout)}`);
+  //       // Return to where we started
+  //       await execCommand(`cd ${workDir}`);
+  //     }
+  //   } catch (e) {
+  //     core.info(`Error: ${JSON.stringify(e)}`);
+  //   }
+  // });
 
-  const diffPromises = apps.map(async app => {
+  const diffs: Diff[] = [];
+
+  await asyncForEach(apps, async app => {
     try {
       const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
       const res = await argocd(command);
@@ -194,14 +196,14 @@ async function run(): Promise<void> {
       core.info(`stdout: ${res.stdout}`);
       core.info(`stdout: ${res.stderr}`);
       if (res.stdout) {
-        return { app, diff: res.stdout };
+        diffs.push({ app, diff: res.stdout });
       }
     } catch (e) {
       core.info(e);
     }
   });
-  const diffs = (await Promise.all(diffPromises)).filter(Boolean) as Diff[];
-  await postDiffComment(diffs);
+  // const diffs = (await Promise.all(diffPromises)) as Diff[];
+  await postDiffComment(diffs.filter(Boolean));
 }
 
 run();
