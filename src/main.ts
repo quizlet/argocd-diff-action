@@ -89,19 +89,16 @@ interface Diff {
   diff: string;
 }
 async function postDiffComment(diffs: Diff[]): Promise<void> {
-  const commentsResponse = await octokit.issues.listComments({
-    issue_number: github.context.issue.number,
-    owner: github.context.repo.owner,
-    repo: github.context.repo.repo
-  });
-  commentsResponse.data.forEach(c => {
-    core.info(c.user.id.toString());
-  });
-  const existingComment = commentsResponse.data.find(d => d.body.includes('ArgoCD Diff for'));
-  const output = diffs
+  const { owner, repo } = github.context.repo;
+
+  const commitLink = `https://github.com/${owner}/${repo}/commits/${github.context.sha}`;
+  const shortCommitSha = String(github.context.sha).substr(0, 7);
+  const output = `
+ArgoCD Diff for ([\`${shortCommitSha}\`](${commitLink})
+  ${diffs
     .map(
       ({ appName, diff }) => `    
-ArgoCD Diff for [\`${appName}\`](https://${ARGOCD_SERVER_URL}/applications/${appName})        
+Diff for App: [\`${appName}\`](https://${ARGOCD_SERVER_URL}/applications/${appName}) 
 <details>
 
 \`\`\`diff
@@ -112,20 +109,29 @@ ${diff}
 
 `
     )
-    .join('\n');
+    .join('\n')}
+`;
+
+  const commentsResponse = await octokit.issues.listComments({
+    issue_number: github.context.issue.number,
+    owner,
+    repo
+  });
+
+  const existingComment = commentsResponse.data.find(d => d.body.includes('ArgoCD Diff for'));
 
   if (existingComment) {
     octokit.issues.updateComment({
-      owner: github.context.repo.owner,
-      repo: github.context.repo.repo,
+      owner,
+      repo,
       comment_id: existingComment.id,
       body: output
     });
   } else {
     octokit.issues.createComment({
       issue_number: github.context.issue.number,
-      owner: github.context.repo.owner,
-      repo: github.context.repo.repo,
+      owner,
+      repo,
       body: output
     });
   }
