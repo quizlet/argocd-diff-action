@@ -89,6 +89,15 @@ interface Diff {
   diff: string;
 }
 async function postDiffComment(diffs: Diff[]): Promise<void> {
+  const commentsResponse = await octokit.issues.listComments({
+    issue_number: github.context.issue.number,
+    owner: github.context.repo.owner,
+    repo: github.context.repo.repo
+  });
+  commentsResponse.data.forEach(c => {
+    core.info(c.toString());
+  });
+  const existingComment = commentsResponse.data.find(d => d.body.includes('ArgoCD Diff for'));
   const output = diffs
     .map(
       ({ appName, diff }) => `    
@@ -105,12 +114,21 @@ ${diff}
     )
     .join('\n');
 
-  octokit.issues.createComment({
-    issue_number: github.context.issue.number,
-    owner: github.context.repo.owner,
-    repo: github.context.repo.repo,
-    body: output
-  });
+  if (existingComment) {
+    octokit.issues.updateComment({
+      owner: github.context.repo.owner,
+      repo: github.context.repo.repo,
+      comment_id: existingComment.id,
+      body: output
+    });
+  } else {
+    octokit.issues.createComment({
+      issue_number: github.context.issue.number,
+      owner: github.context.repo.owner,
+      repo: github.context.repo.repo,
+      body: output
+    });
+  }
 }
 
 async function run(): Promise<void> {

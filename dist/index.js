@@ -3375,6 +3375,7 @@ core.info(githubToken);
 const ARGOCD_SERVER_URL = core.getInput('argocd-server-url');
 const ARGOCD_TOKEN = core.getInput('argocd-token');
 const VERSION = core.getInput('argocd-version');
+const EXTRA_CLI_ARGS = core.getInput('argocd-extra-cli-args');
 const octokit = github.getOctokit(githubToken);
 function execCommand(command, failingExitCode = 1) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -3402,7 +3403,7 @@ function setupArgoCDCommand() {
         fs.chmodSync(path.join(argoBinaryPath), '755');
         core.addPath(argoBinaryPath);
         return (params) => __awaiter(this, void 0, void 0, function* () {
-            return execCommand(`${argoBinaryPath} ${params} --grpc-web --auth-token=${ARGOCD_TOKEN} --server=${ARGOCD_SERVER_URL}`, 2);
+            return execCommand(`${argoBinaryPath} ${params} --auth-token=${ARGOCD_TOKEN} --server=${ARGOCD_SERVER_URL} ${EXTRA_CLI_ARGS}`, 2);
         });
     });
 }
@@ -3430,6 +3431,15 @@ function getApps() {
 }
 function postDiffComment(diffs) {
     return __awaiter(this, void 0, void 0, function* () {
+        const commentsResponse = yield octokit.issues.listComments({
+            issue_number: github.context.issue.number,
+            owner: github.context.repo.owner,
+            repo: github.context.repo.repo
+        });
+        commentsResponse.data.forEach(c => {
+            core.info(c.toString());
+        });
+        const existingComment = commentsResponse.data.find(d => d.body.includes('ArgoCD Diff for'));
         const output = diffs
             .map(({ appName, diff }) => `    
 ArgoCD Diff for [\`${appName}\`](https://${ARGOCD_SERVER_URL}/applications/${appName})        
@@ -3443,12 +3453,22 @@ ${diff}
 
 `)
             .join('\n');
-        octokit.issues.createComment({
-            issue_number: github.context.issue.number,
-            owner: github.context.repo.owner,
-            repo: github.context.repo.repo,
-            body: output
-        });
+        if (existingComment) {
+            octokit.issues.updateComment({
+                owner: github.context.repo.owner,
+                repo: github.context.repo.repo,
+                comment_id: existingComment.id,
+                body: output
+            });
+        }
+        else {
+            octokit.issues.createComment({
+                issue_number: github.context.issue.number,
+                owner: github.context.repo.owner,
+                repo: github.context.repo.repo,
+                body: output
+            });
+        }
     });
 }
 function run() {
