@@ -171,14 +171,18 @@ async function run(): Promise<void> {
   core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
   const workDir = (await execCommand('pwd')).stdout;
 
-  asyncForEach(apps, async app => {
-    if (app.spec.source.helm) {
-      const output1 = await execCommand(`cd ${workDir}/${app.spec.source.path}`);
-      core.info(`output: ${JSON.stringify(output1.stdout)}`);
-      const output2 = await execCommand(`pwd && helm repo update`);
-      core.info(`output: ${JSON.stringify(output2.stdout)}`);
-      // Return to where we started
-      await execCommand(`cd ${workDir}`);
+  await asyncForEach(apps, async app => {
+    try {
+      if (app.spec.source.helm) {
+        const output1 = await execCommand(`cd ${workDir}/${app.spec.source.path}`);
+        core.info(`output: ${JSON.stringify(output1.stdout)}`);
+        const output2 = await execCommand(`pwd && helm repo update`);
+        core.info(`output: ${JSON.stringify(output2.stdout)}`);
+        // Return to where we started
+        await execCommand(`cd ${workDir}`);
+      }
+    } catch (e) {
+      core.info(`Error: ${e.toString()}`);
     }
   });
 

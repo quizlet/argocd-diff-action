@@ -3487,14 +3487,19 @@ function run() {
         const apps = yield getApps();
         core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
         const workDir = (yield execCommand('pwd')).stdout;
-        asyncForEach(apps, (app) => __awaiter(this, void 0, void 0, function* () {
-            if (app.spec.source.helm) {
-                const output1 = yield execCommand(`cd ${workDir}/${app.spec.source.path}`);
-                core.info(`output: ${JSON.stringify(output1.stdout)}`);
-                const output2 = yield execCommand(`pwd && helm repo update`);
-                core.info(`output: ${JSON.stringify(output2.stdout)}`);
-                // Return to where we started
-                yield execCommand(`cd ${workDir}`);
+        yield asyncForEach(apps, (app) => __awaiter(this, void 0, void 0, function* () {
+            try {
+                if (app.spec.source.helm) {
+                    const output1 = yield execCommand(`cd ${workDir}/${app.spec.source.path}`);
+                    core.info(`output: ${JSON.stringify(output1.stdout)}`);
+                    const output2 = yield execCommand(`pwd && helm repo update`);
+                    core.info(`output: ${JSON.stringify(output2.stdout)}`);
+                    // Return to where we started
+                    yield execCommand(`cd ${workDir}`);
+                }
+            }
+            catch (e) {
+                core.info(`Error: ${e.toString()}`);
             }
         }));
         const diffPromises = apps.map((app) => __awaiter(this, void 0, void 0, function* () {
