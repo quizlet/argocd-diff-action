@@ -3490,12 +3490,8 @@ function run() {
         yield asyncForEach(apps, (app) => __awaiter(this, void 0, void 0, function* () {
             try {
                 if (app.spec.source.helm) {
-                    const output1 = yield execCommand(`cd ${workDir}/${app.spec.source.path}`);
+                    const output1 = yield execCommand(`cd ${workDir}/${app.spec.source.path} && pwd && helm dependency update`);
                     core.info(`output: ${JSON.stringify(output1.stdout)}`);
-                    const output2 = yield execCommand(`pwd`);
-                    core.info(`output2: ${JSON.stringify(output2.stdout)}`);
-                    const output3 = yield execCommand(`helm dependency update`);
-                    core.info(`output3: ${JSON.stringify(output3.stdout)}`);
                     // Return to where we started
                     yield execCommand(`cd ${workDir}`);
                 }
