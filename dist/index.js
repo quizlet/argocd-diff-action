@@ -3437,7 +3437,7 @@ function postDiffComment(diffs) {
             repo: github.context.repo.repo
         });
         commentsResponse.data.forEach(c => {
-            core.info(c.toString());
+            core.info(c.user.id.toString());
         });
         const existingComment = commentsResponse.data.find(d => d.body.includes('ArgoCD Diff for'));
         const output = diffs
