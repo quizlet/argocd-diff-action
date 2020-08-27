@@ -195,12 +195,18 @@ async function run(): Promise<void> {
     try {
       if (app.spec.source.helm) {
         core.info(`${workDir}/${app.spec.source.path}`);
-        const output1 = await execCommand(`helm dependency update`, {
+        const output1 = await execCommand(`ls`, {
           cwd: `${workDir}/${app.spec.source.path}`,
           failingExitCode: 1
         });
         core.info(`stdout: ${JSON.stringify(output1.stdout)}`);
         core.error(`stderr: ${JSON.stringify(output1.stderr)}`);
+        const output2 = await execCommand(`helm dependency update`, {
+          cwd: `${workDir}/${app.spec.source.path}`,
+          failingExitCode: 1
+        });
+        core.info(`stdout: ${JSON.stringify(output2.stdout)}`);
+        core.error(`stderr: ${JSON.stringify(output2.stderr)}`);
       }
       const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
       const res = await argocd(command);
