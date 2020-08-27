@@ -30,13 +30,11 @@
     "@actions/github": "^4.0.0",
     "@actions/tool-cache": "^1.5.5",
     "@types/node-fetch": "^2.5.7",
-    "node-fetch": "^2.6.0",
-    "semver": "^7.3.2"
+    "node-fetch": "^2.6.0"
   },
   "devDependencies": {
     "@types/jest": "^24.0.23",
     "@types/node": "^12.7.12",
-    "@types/semver": "^7.3.3",
     "@typescript-eslint/parser": "^2.8.0",
     "@zeit/ncc": "^0.20.5",
     "eslint": "^5.16.0",
@@ -47,7 +45,6 @@
     "js-yaml": "^3.13.1",
     "prettier": "^1.19.1",
     "ts-jest": "^24.2.0",
-    "typed-rest-client": "^1.7.3",
     "typescript": "^3.6.4"
   }
 }
