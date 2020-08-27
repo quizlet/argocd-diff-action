@@ -120,7 +120,8 @@ async function postDiffComment(diffs: Diff[]): Promise<void> {
   const shortCommitSha = String(sha).substr(0, 7);
 
   const diffOutput = diffs.map(
-    ({ app, diff, error }) => `    
+    ({ app, diff, error }) => `   
+
 Diff for App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applications/${
       app.metadata.name
     }) ${error ? ' Error 🛑' : ''}
@@ -138,18 +139,16 @@ ${JSON.stringify(error)}
 ${
   diff
     ? `
+<details>
 
-    <details>
+\`\`\`diff
+${diff}
+\`\`\`
 
-    \`\`\`diff
-    ${diff}
-    \`\`\`
-    
-    </details>
+</details>
 `
     : ''
 }
-
 
 `
   );

@@ -3443,7 +3443,8 @@ function postDiffComment(diffs) {
         const sha = (_b = (_a = github.context.payload.pull_request) === null || _a === void 0 ? void 0 : _a.head) === null || _b === void 0 ? void 0 : _b.sha;
         const commitLink = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`;
         const shortCommitSha = String(sha).substr(0, 7);
-        const diffOutput = diffs.map(({ app, diff, error }) => `    
+        const diffOutput = diffs.map(({ app, diff, error }) => `   
+
 Diff for App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applications/${app.metadata.name}) ${error ? ' Error 🛑' : ''}
 App sync status: ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️'}
 ${error
@@ -3456,17 +3457,15 @@ ${JSON.stringify(error)}
 
 ${diff
             ? `
+<details>
 
-    <details>
+\`\`\`diff
+${diff}
+\`\`\`
 
-    \`\`\`diff
-    ${diff}
-    \`\`\`
-    
-    </details>
+</details>
 `
             : ''}
-
 
 `);
         const output = scrubSecrets(`
