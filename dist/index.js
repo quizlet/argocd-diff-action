@@ -3503,8 +3503,8 @@ function run() {
         // });
         const diffs = [];
         yield asyncForEach(apps, (app) => __awaiter(this, void 0, void 0, function* () {
-            const appPath = app.spec.source.path.replace(`${github.context.repo.repo}/`, '');
-            core.info(path.resolve(workDir, app.spec.source.path));
+            const appPath = path.resolve('..', app.spec.source.path);
+            core.info(appPath);
             try {
                 if (app.spec.source.helm) {
                     core.info(`${workDir}/${appPath}`);

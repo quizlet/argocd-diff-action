@@ -192,8 +192,8 @@ async function run(): Promise<void> {
   const diffs: Diff[] = [];
 
   await asyncForEach(apps, async app => {
-    const appPath = app.spec.source.path.replace(`${github.context.repo.repo}/`, '');
-    core.info(path.resolve(workDir, app.spec.source.path));
+    const appPath = path.resolve('..', app.spec.source.path);
+    core.info(appPath);
     try {
       if (app.spec.source.helm) {
         core.info(`${workDir}/${appPath}`);
