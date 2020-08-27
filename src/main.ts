@@ -1,6 +1,6 @@
 import * as core from '@actions/core';
 import * as tc from '@actions/tool-cache';
-import { exec, ExecException } from 'child_process';
+import { exec, ExecException, ExecOptions } from 'child_process';
 import * as github from '@actions/github';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -40,14 +40,17 @@ const EXTRA_CLI_ARGS = core.getInput('argocd-extra-cli-args');
 
 const octokit = github.getOctokit(githubToken);
 
-async function execCommand(command: string, failingExitCode = 1): Promise<ExecResult> {
+async function execCommand(
+  command: string,
+  options: { failingExitCode: number } & ExecOptions = { failingExitCode: 1 }
+): Promise<ExecResult> {
   const p = new Promise<ExecResult>(async (done, failed) => {
     exec(command, (err: ExecException | null, stdout: string, stderr: string): void => {
       const res: ExecResult = {
         stdout,
         stderr
       };
-      if (err && err.code === failingExitCode) {
+      if (err && err.code === options.failingExitCode) {
         res.err = err;
         failed(res);
         return;
@@ -71,7 +74,7 @@ async function setupArgoCDCommand(): Promise<(params: string) => Promise<ExecRes
   return async (params: string) =>
     execCommand(
       `${argoBinaryPath} ${params} --auth-token=${ARGOCD_TOKEN} --server=${ARGOCD_SERVER_URL} ${EXTRA_CLI_ARGS}`,
-      2
+      { failingExitCode: 2 }
     );
 }
 
@@ -191,9 +194,11 @@ async function run(): Promise<void> {
   await asyncForEach(apps, async app => {
     try {
       if (app.spec.source.helm) {
-        const output1 = await execCommand(
-          `cd ${workDir}/${app.spec.source.path} && pwd && helm dependency update`
-        );
+        core.info(`${workDir}/${app.spec.source.path}`);
+        const output1 = await execCommand(`helm dependency update`, {
+          cwd: `${workDir}/${app.spec.source.path}`,
+          failingExitCode: 1
+        });
         core.info(`stdout: ${JSON.stringify(output1.stdout)}`);
         core.error(`stderr: ${JSON.stringify(output1.stderr)}`);
       }
@@ -201,7 +206,7 @@ async function run(): Promise<void> {
       const res = await argocd(command);
       core.info(`Running: argocd ${command}`);
       core.info(`stdout: ${res.stdout}`);
-      core.info(`stdout: ${res.stderr}`);
+      core.info(`stderr: ${res.stderr}`);
       if (res.stdout) {
         diffs.push({ app, diff: res.stdout });
       }
