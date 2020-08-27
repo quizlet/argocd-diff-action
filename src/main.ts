@@ -58,6 +58,15 @@ async function execCommand(command: string, options: ExecOptions = {}): Promise<
   return await p;
 }
 
+function scrubSecrets(input: string): string {
+  let output = input;
+  const authTokenMatches = input.match(/--auth-token=([\w.\S]+)/);
+  if (authTokenMatches) {
+    output = output.replace(new RegExp(authTokenMatches[1], 'g'), '***');
+  }
+  return output;
+}
+
 async function setupArgoCDCommand(): Promise<(params: string) => Promise<ExecResult>> {
   const argoBinaryPath = 'bin/argo';
   await tc.downloadTool(
@@ -116,29 +125,39 @@ Diff for App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applicatio
       app.metadata.name
     }) ${error ? ' Error 🛑' : ''}
 App sync status: ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️'}
-
-${error ??
-  `
+${
+  error
+    ? `
 \`\`\`
 ${JSON.stringify(error)}
 \`\`\`
-`}
+`
+    : ''
+}
 
-<details>
+${
+  diff
+    ? `
 
-\`\`\`diff
-${diff}
-\`\`\`
+    <details>
 
-</details>
+    \`\`\`diff
+    ${diff}
+    \`\`\`
+    
+    </details>
+`
+    : ''
+}
+
 
 `
   );
 
-  const output = `
+  const output = scrubSecrets(`
 ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
   ${diffOutput.join('\n')}
-`;
+`);
 
   const commentsResponse = await octokit.issues.listComments({
     issue_number: github.context.issue.number,
@@ -201,7 +220,6 @@ async function run(): Promise<void> {
         } else {
           diffs.push({ app, diff: '', error: res.err });
         }
-        core.error(JSON.stringify(e));
       }
     } catch (e) {
       core.info(JSON.stringify(e));
