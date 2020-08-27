@@ -3520,15 +3520,19 @@ function run() {
                     // and then consider it a success if there's a diff in stdout
                     // https://github.com/argoproj/argo-cd/issues/3588
                     yield argocd(command);
+                    core.info('diff finished without throwing');
                 }
                 catch (e) {
+                    core.info('diff threw an error');
                     const res = e;
                     core.info(`stdout: ${res.stdout}`);
                     core.info(`stderr: ${res.stderr}`);
                     if (res.stdout) {
+                        core.info('found stdout, pushing as success');
                         diffs.push({ app, diff: res.stdout });
                     }
                     else {
+                        core.info('no stdout, pushing as failure');
                         diffs.push({ app, diff: '', error: res.err });
                     }
                 }
