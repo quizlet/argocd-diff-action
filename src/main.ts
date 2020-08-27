@@ -70,7 +70,7 @@ async function setupArgoCDCommand(): Promise<(params: string) => Promise<ExecRes
 
   return async (params: string) =>
     execCommand(
-      `${argoBinaryPath} ${params} --loglevel=debug --auth-token=${ARGOCD_TOKEN} --server=${ARGOCD_SERVER_URL} ${EXTRA_CLI_ARGS}`
+      `${argoBinaryPath} ${params} --auth-token=${ARGOCD_TOKEN} --server=${ARGOCD_SERVER_URL} ${EXTRA_CLI_ARGS}`
     );
 }
 
@@ -101,34 +101,43 @@ async function getApps(): Promise<App[]> {
 interface Diff {
   app: App;
   diff: string;
+  error?: Error;
 }
 async function postDiffComment(diffs: Diff[]): Promise<void> {
   const { owner, repo } = github.context.repo;
   const sha = github.context.payload.pull_request?.head?.sha;
 
-  const commitLink = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`;
-  const shortCommitSha = String(sha).substr(0, 7);
-
-  const diffOutput = diffs.map(
-    ({ app, diff }) => `    
-Diff for App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applications/${
+  const diffOutput = diffs.map(({ app, diff, error }) => {
+    const metadata = `      Diff for App: [\`${
       app.metadata.name
-    }) App sync status: ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️'}
-<details>
+    }\`](https://${ARGOCD_SERVER_URL}/applications/${app.metadata.name}) App sync status: ${
+      app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️'
+    }`;
+    if (error) {
+      return `${metadata}
+Diff Error 🛑
+${JSON.stringify(error)}
+      `;
+    }
+    return `    
+      ${metadata}
+      <details>
+      
+      \`\`\`diff
+      ${diff}
+      \`\`\`
+      
+      </details>
+      
+      `;
+  });
 
-\`\`\`diff
-${diff}
-\`\`\`
-
-</details>
-
-`
-  );
-
+  const commitURL = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`;
+  const shortCommitSha = String(sha).substr(0, 7);
   const output = `
-ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
-  ${diffOutput.join('\n')}
-`;
+    ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitURL})
+      ${diffOutput.join('\n')}
+    `;
 
   const commentsResponse = await octokit.issues.listComments({
     issue_number: github.context.issue.number,
@@ -174,30 +183,20 @@ async function run(): Promise<void> {
   const diffs: Diff[] = [];
 
   await asyncForEach(apps, async app => {
-    // const appDir = path.resolve('..', app.spec.source.path);
-    // core.info(appDir);
     try {
-      // if (app.spec.source.helm) {
-      //   const output1 = await execCommand(`ls`, {
-      //     cwd: appDir,
-      //     failingExitCode: 1
-      //   });
-      //   core.info(`stdout: ${JSON.stringify(output1.stdout)}`);
-      //   core.error(`stderr: ${JSON.stringify(output1.stderr)}`);
-      //   const output2 = await execCommand(`helm dependency update`, {
-      //     cwd: appDir,
-      //     failingExitCode: 1
-      //   });
-      //   core.info(`stdout: ${JSON.stringify(output2.stdout)}`);
-      //   core.error(`stderr: ${JSON.stringify(output2.stderr)}`);
-      // }
       const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
-      const res = await argocd(command);
-      core.info(`Running: argocd ${command}`);
-      core.info(`stdout: ${res.stdout}`);
-      core.info(`stderr: ${res.stderr}`);
-      if (res.stdout) {
-        diffs.push({ app, diff: res.stdout });
+      let res;
+      try {
+        core.info(`Running: argocd ${command}`);
+        res = await argocd(command);
+        core.info(`stdout: ${res.stdout}`);
+        core.info(`stderr: ${res.stderr}`);
+        if (res.stdout) {
+          diffs.push({ app, diff: res.stdout });
+        }
+      } catch (e) {
+        core.error(JSON.stringify(e));
+        diffs.push({ app, error: e, diff: '' });
       }
     } catch (e) {
       core.info(JSON.stringify(e));
