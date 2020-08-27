@@ -3403,7 +3403,7 @@ function setupArgoCDCommand() {
         fs.chmodSync(path.join(argoBinaryPath), '755');
         core.addPath(argoBinaryPath);
         return (params) => __awaiter(this, void 0, void 0, function* () {
-            return execCommand(`${argoBinaryPath} ${params} --loglevel=debug --auth-token=${ARGOCD_TOKEN} --server=${ARGOCD_SERVER_URL} ${EXTRA_CLI_ARGS}`, { failingExitCode: 2 });
+            return execCommand(`${argoBinaryPath} ${params} --loglevel=debug --auth-token=${ARGOCD_TOKEN} --server=${ARGOCD_SERVER_URL} ${EXTRA_CLI_ARGS}`, { failingExitCode: 1 });
         });
     });
 }
@@ -3486,40 +3486,25 @@ function run() {
         const argocd = yield setupArgoCDCommand();
         const apps = yield getApps();
         core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
-        const workDir = (yield execCommand('pwd')).stdout.trim();
-        // await asyncForEach(apps, async app => {
-        //   try {
-        //     if (app.spec.source.helm) {
-        //       const output1 = await execCommand(
-        //         `cd ${workDir}/${app.spec.source.path} && pwd && helm dependency update`
-        //       );
-        //       core.info(`output: ${JSON.stringify(output1.stdout)}`);
-        //       // Return to where we started
-        //       await execCommand(`cd ${workDir}`);
-        //     }
-        //   } catch (e) {
-        //     core.info(`Error: ${JSON.stringify(e)}`);
-        //   }
-        // });
         const diffs = [];
         yield asyncForEach(apps, (app) => __awaiter(this, void 0, void 0, function* () {
-            const appDir = path.resolve('..', app.spec.source.path);
-            core.info(appDir);
+            // const appDir = path.resolve('..', app.spec.source.path);
+            // core.info(appDir);
             try {
-                if (app.spec.source.helm) {
-                    const output1 = yield execCommand(`ls`, {
-                        cwd: appDir,
-                        failingExitCode: 1
-                    });
-                    core.info(`stdout: ${JSON.stringify(output1.stdout)}`);
-                    core.error(`stderr: ${JSON.stringify(output1.stderr)}`);
-                    const output2 = yield execCommand(`helm dependency update`, {
-                        cwd: appDir,
-                        failingExitCode: 1
-                    });
-                    core.info(`stdout: ${JSON.stringify(output2.stdout)}`);
-                    core.error(`stderr: ${JSON.stringify(output2.stderr)}`);
-                }
+                // if (app.spec.source.helm) {
+                //   const output1 = await execCommand(`ls`, {
+                //     cwd: appDir,
+                //     failingExitCode: 1
+                //   });
+                //   core.info(`stdout: ${JSON.stringify(output1.stdout)}`);
+                //   core.error(`stderr: ${JSON.stringify(output1.stderr)}`);
+                //   const output2 = await execCommand(`helm dependency update`, {
+                //     cwd: appDir,
+                //     failingExitCode: 1
+                //   });
+                //   core.info(`stdout: ${JSON.stringify(output2.stdout)}`);
+                //   core.error(`stderr: ${JSON.stringify(output2.stderr)}`);
+                // }
                 const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
                 const res = yield argocd(command);
                 core.info(`Running: argocd ${command}`);
