@@ -3486,7 +3486,7 @@ function run() {
         const argocd = yield setupArgoCDCommand();
         const apps = yield getApps();
         core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
-        const workDir = (yield execCommand('pwd')).stdout;
+        const workDir = (yield execCommand('pwd')).stdout.trim();
         // await asyncForEach(apps, async app => {
         //   try {
         //     if (app.spec.source.helm) {

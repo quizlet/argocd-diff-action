@@ -172,7 +172,7 @@ async function run(): Promise<void> {
   const argocd = await setupArgoCDCommand();
   const apps = await getApps();
   core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
-  const workDir = (await execCommand('pwd')).stdout;
+  const workDir = (await execCommand('pwd')).stdout.trim();
 
   // await asyncForEach(apps, async app => {
   //   try {
