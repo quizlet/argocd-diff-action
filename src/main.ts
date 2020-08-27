@@ -40,17 +40,14 @@ const EXTRA_CLI_ARGS = core.getInput('argocd-extra-cli-args');
 
 const octokit = github.getOctokit(githubToken);
 
-async function execCommand(
-  command: string,
-  options: { failingExitCode: number } & ExecOptions = { failingExitCode: 1 }
-): Promise<ExecResult> {
+async function execCommand(command: string, options: ExecOptions = {}): Promise<ExecResult> {
   const p = new Promise<ExecResult>(async (done, failed) => {
     exec(command, options, (err: ExecException | null, stdout: string, stderr: string): void => {
       const res: ExecResult = {
         stdout,
         stderr
       };
-      if (err && err.code === options.failingExitCode) {
+      if (err) {
         res.err = err;
         failed(res);
         return;
@@ -73,8 +70,7 @@ async function setupArgoCDCommand(): Promise<(params: string) => Promise<ExecRes
 
   return async (params: string) =>
     execCommand(
-      `${argoBinaryPath} ${params} --loglevel=debug --auth-token=${ARGOCD_TOKEN} --server=${ARGOCD_SERVER_URL} ${EXTRA_CLI_ARGS}`,
-      { failingExitCode: 1 }
+      `${argoBinaryPath} ${params} --loglevel=debug --auth-token=${ARGOCD_TOKEN} --server=${ARGOCD_SERVER_URL} ${EXTRA_CLI_ARGS}`
     );
 }
 
@@ -142,6 +138,7 @@ ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
 
   const existingComment = commentsResponse.data.find(d => d.body.includes('ArgoCD Diff for'));
 
+  // Existing comments should be updated even if there are no changes this round in order to indicate that
   if (existingComment) {
     octokit.issues.updateComment({
       owner,
@@ -149,7 +146,8 @@ ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
       comment_id: existingComment.id,
       body: output
     });
-  } else {
+    // Only post a new comment when there are changes
+  } else if (diffs.length) {
     octokit.issues.createComment({
       issue_number: github.context.issue.number,
       owner,
@@ -205,8 +203,7 @@ async function run(): Promise<void> {
       core.info(JSON.stringify(e));
     }
   });
-  // const diffs = (await Promise.all(diffPromises)) as Diff[];
-  await postDiffComment(diffs.filter(Boolean));
+  await postDiffComment(diffs);
 }
 
 run();

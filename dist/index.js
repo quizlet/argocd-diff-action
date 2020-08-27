@@ -3377,7 +3377,7 @@ const ARGOCD_TOKEN = core.getInput('argocd-token');
 const VERSION = core.getInput('argocd-version');
 const EXTRA_CLI_ARGS = core.getInput('argocd-extra-cli-args');
 const octokit = github.getOctokit(githubToken);
-function execCommand(command, options = { failingExitCode: 1 }) {
+function execCommand(command, options = {}) {
     return __awaiter(this, void 0, void 0, function* () {
         const p = new Promise((done, failed) => __awaiter(this, void 0, void 0, function* () {
             child_process_1.exec(command, options, (err, stdout, stderr) => {
@@ -3385,7 +3385,7 @@ function execCommand(command, options = { failingExitCode: 1 }) {
                     stdout,
                     stderr
                 };
-                if (err && err.code === options.failingExitCode) {
+                if (err) {
                     res.err = err;
                     failed(res);
                     return;
@@ -3403,7 +3403,7 @@ function setupArgoCDCommand() {
         fs.chmodSync(path.join(argoBinaryPath), '755');
         core.addPath(argoBinaryPath);
         return (params) => __awaiter(this, void 0, void 0, function* () {
-            return execCommand(`${argoBinaryPath} ${params} --loglevel=debug --auth-token=${ARGOCD_TOKEN} --server=${ARGOCD_SERVER_URL} ${EXTRA_CLI_ARGS}`, { failingExitCode: 1 });
+            return execCommand(`${argoBinaryPath} ${params} --loglevel=debug --auth-token=${ARGOCD_TOKEN} --server=${ARGOCD_SERVER_URL} ${EXTRA_CLI_ARGS}`);
         });
     });
 }
@@ -3456,6 +3456,7 @@ ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
             repo
         });
         const existingComment = commentsResponse.data.find(d => d.body.includes('ArgoCD Diff for'));
+        // Existing comments should be updated even if there are no changes this round in order to indicate that
         if (existingComment) {
             octokit.issues.updateComment({
                 owner,
@@ -3463,8 +3464,9 @@ ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
                 comment_id: existingComment.id,
                 body: output
             });
+            // Only post a new comment when there are changes
         }
-        else {
+        else if (diffs.length) {
             octokit.issues.createComment({
                 issue_number: github.context.issue.number,
                 owner,
@@ -3518,8 +3520,7 @@ function run() {
                 core.info(JSON.stringify(e));
             }
         }));
-        // const diffs = (await Promise.all(diffPromises)) as Diff[];
-        yield postDiffComment(diffs.filter(Boolean));
+        yield postDiffComment(diffs);
     });
 }
 run();
