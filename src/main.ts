@@ -192,25 +192,24 @@ async function run(): Promise<void> {
   const diffs: Diff[] = [];
 
   await asyncForEach(apps, async app => {
-    const appPath = path.resolve('..', app.spec.source.path);
-    core.info(appPath);
+    const appDir = path.resolve('..', app.spec.source.path);
+    core.info(appDir);
     try {
       if (app.spec.source.helm) {
-        core.info(`${workDir}/${appPath}`);
         const output1 = await execCommand(`ls`, {
-          cwd: `${workDir}/${appPath}`,
+          cwd: appDir,
           failingExitCode: 1
         });
         core.info(`stdout: ${JSON.stringify(output1.stdout)}`);
         core.error(`stderr: ${JSON.stringify(output1.stderr)}`);
         const output2 = await execCommand(`helm dependency update`, {
-          cwd: `${workDir}/${appPath}`,
+          cwd: appDir,
           failingExitCode: 1
         });
         core.info(`stdout: ${JSON.stringify(output2.stdout)}`);
         core.error(`stderr: ${JSON.stringify(output2.stderr)}`);
       }
-      const command = `app diff ${app.metadata.name} --local=${appPath}`;
+      const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
       const res = await argocd(command);
       core.info(`Running: argocd ${command}`);
       core.info(`stdout: ${res.stdout}`);
