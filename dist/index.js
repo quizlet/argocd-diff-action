@@ -3503,23 +3503,25 @@ function run() {
         // });
         const diffs = [];
         yield asyncForEach(apps, (app) => __awaiter(this, void 0, void 0, function* () {
+            const appPath = app.spec.source.path.replace(`${github.context.repo.repo}/`, '');
+            core.info(path.resolve(workDir, app.spec.source.path));
             try {
                 if (app.spec.source.helm) {
-                    core.info(`${workDir}/${app.spec.source.path}`);
+                    core.info(`${workDir}/${appPath}`);
                     const output1 = yield execCommand(`ls`, {
-                        cwd: `${workDir}/${app.spec.source.path}`,
+                        cwd: `${workDir}/${appPath}`,
                         failingExitCode: 1
                     });
                     core.info(`stdout: ${JSON.stringify(output1.stdout)}`);
                     core.error(`stderr: ${JSON.stringify(output1.stderr)}`);
                     const output2 = yield execCommand(`helm dependency update`, {
-                        cwd: `${workDir}/${app.spec.source.path}`,
+                        cwd: `${workDir}/${appPath}`,
                         failingExitCode: 1
                     });
                     core.info(`stdout: ${JSON.stringify(output2.stdout)}`);
                     core.error(`stderr: ${JSON.stringify(output2.stderr)}`);
                 }
-                const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
+                const command = `app diff ${app.metadata.name} --local=${appPath}`;
                 const res = yield argocd(command);
                 core.info(`Running: argocd ${command}`);
                 core.info(`stdout: ${res.stdout}`);
