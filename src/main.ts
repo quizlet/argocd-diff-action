@@ -211,7 +211,7 @@ async function run(): Promise<void> {
         diffs.push({ app, diff: res.stdout });
       }
     } catch (e) {
-      core.info(e);
+      core.info(JSON.stringify(e));
     }
   });
   // const diffs = (await Promise.all(diffPromises)) as Diff[];

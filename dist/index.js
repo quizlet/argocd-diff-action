@@ -3523,7 +3523,7 @@ function run() {
                 }
             }
             catch (e) {
-                core.info(e);
+                core.info(JSON.stringify(e));
             }
         }));
         // const diffs = (await Promise.all(diffPromises)) as Diff[];
