@@ -3545,8 +3545,9 @@ err: ${JSON.stringify(res.err)}
             }
         }));
         yield postDiffComment(diffs);
-        if (diffs.some(d => d.error)) {
-            core.setFailed(`ArgoCD diff errors`);
+        const diffsWithErrors = diffs.filter(d => d.error);
+        if (diffsWithErrors.length) {
+            core.setFailed(`ArgoCD diff failed: Encountered ${diffsWithErrors.length} errors`);
         }
     });
 }
