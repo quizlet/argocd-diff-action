@@ -6,6 +6,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import nodeFetch from 'node-fetch';
 
+import { getKustomize } from './kustomize';
+
 interface ExecResult {
   err?: Error | undefined;
   stdout: string;
@@ -36,6 +38,7 @@ core.info(githubToken);
 const ARGOCD_SERVER_URL = core.getInput('argocd-server-url');
 const ARGOCD_TOKEN = core.getInput('argocd-token');
 const VERSION = core.getInput('argocd-version');
+const KUSTOMIZE_VERSION = core.getInput('kustomize-version');
 const EXTRA_CLI_ARGS = core.getInput('argocd-extra-cli-args');
 
 const octokit = github.getOctokit(githubToken);
@@ -194,8 +197,13 @@ async function asyncForEach<T>(
   }
 }
 
+async function setupKustomize(): Promise<void> {
+  await getKustomize(KUSTOMIZE_VERSION);
+}
+
 async function run(): Promise<void> {
   const argocd = await setupArgoCDCommand();
+  await setupKustomize();
   const apps = await getApps();
   core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
 
