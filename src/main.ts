@@ -107,37 +107,38 @@ async function postDiffComment(diffs: Diff[]): Promise<void> {
   const { owner, repo } = github.context.repo;
   const sha = github.context.payload.pull_request?.head?.sha;
 
-  const diffOutput = diffs.map(({ app, diff, error }) => {
-    const metadata = `      Diff for App: [\`${
-      app.metadata.name
-    }\`](https://${ARGOCD_SERVER_URL}/applications/${app.metadata.name}) App sync status: ${
-      app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️'
-    }`;
-    if (error) {
-      return `${metadata}
-Diff Error 🛑
-${JSON.stringify(error)}
-      `;
-    }
-    return `    
-      ${metadata}
-      <details>
-      
-      \`\`\`diff
-      ${diff}
-      \`\`\`
-      
-      </details>
-      
-      `;
-  });
-
-  const commitURL = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`;
+  const commitLink = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`;
   const shortCommitSha = String(sha).substr(0, 7);
+
+  const diffOutput = diffs.map(
+    ({ app, diff, error }) => `    
+Diff for App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applications/${
+      app.metadata.name
+    }) ${error ? ' Error 🛑' : ''}
+App sync status: ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️'}
+
+${error ??
+  `
+\`\`\`
+${JSON.stringify(error)}
+\`\`\`
+`}
+
+<details>
+
+\`\`\`diff
+${diff}
+\`\`\`
+
+</details>
+
+`
+  );
+
   const output = `
-    ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitURL})
-      ${diffOutput.join('\n')}
-    `;
+ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
+  ${diffOutput.join('\n')}
+`;
 
   const commentsResponse = await octokit.issues.listComments({
     issue_number: github.context.issue.number,
@@ -196,13 +197,17 @@ async function run(): Promise<void> {
         }
       } catch (e) {
         core.error(JSON.stringify(e));
-        diffs.push({ app, error: e, diff: '' });
+        // diffs.push({ app, error: e, diff: '' }); // TEMP disable logging for now
+        await argocd(`${command} --loglevel debug`);
       }
     } catch (e) {
       core.info(JSON.stringify(e));
     }
   });
   await postDiffComment(diffs);
+  if (diffs.some(d => d.error)) {
+    core.setFailed(`ArgoCD diff errors`);
+  }
 }
 
 run();

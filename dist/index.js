@@ -3433,32 +3433,31 @@ function postDiffComment(diffs) {
     return __awaiter(this, void 0, void 0, function* () {
         const { owner, repo } = github.context.repo;
         const sha = (_b = (_a = github.context.payload.pull_request) === null || _a === void 0 ? void 0 : _a.head) === null || _b === void 0 ? void 0 : _b.sha;
-        const diffOutput = diffs.map(({ app, diff, error }) => {
-            const metadata = `      Diff for App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applications/${app.metadata.name}) App sync status: ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️'}`;
-            if (error) {
-                return `${metadata}
-Diff Error 🛑
-${JSON.stringify(error)}
-      `;
-            }
-            return `    
-      ${metadata}
-      <details>
-      
-      \`\`\`diff
-      ${diff}
-      \`\`\`
-      
-      </details>
-      
-      `;
-        });
-        const commitURL = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`;
+        const commitLink = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`;
         const shortCommitSha = String(sha).substr(0, 7);
+        const diffOutput = diffs.map(({ app, diff, error }) => `    
+Diff for App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applications/${app.metadata.name}) ${error ? ' Error 🛑' : ''}
+App sync status: ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️'}
+
+${(error !== null && error !== void 0 ? error : `
+\`\`\`
+${JSON.stringify(error)}
+\`\`\`
+`)}
+
+<details>
+
+\`\`\`diff
+${diff}
+\`\`\`
+
+</details>
+
+`);
         const output = `
-    ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitURL})
-      ${diffOutput.join('\n')}
-    `;
+ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
+  ${diffOutput.join('\n')}
+`;
         const commentsResponse = yield octokit.issues.listComments({
             issue_number: github.context.issue.number,
             owner,
@@ -3513,7 +3512,8 @@ function run() {
                 }
                 catch (e) {
                     core.error(JSON.stringify(e));
-                    diffs.push({ app, error: e, diff: '' });
+                    // diffs.push({ app, error: e, diff: '' }); // TEMP disable logging for now
+                    yield argocd(`${command} --loglevel debug`);
                 }
             }
             catch (e) {
@@ -3521,6 +3521,9 @@ function run() {
             }
         }));
         yield postDiffComment(diffs);
+        if (diffs.some(d => d.error)) {
+            core.setFailed(`ArgoCD diff errors`);
+        }
     });
 }
 run();
