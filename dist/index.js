@@ -3500,20 +3500,24 @@ function run() {
         yield asyncForEach(apps, (app) => __awaiter(this, void 0, void 0, function* () {
             try {
                 const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
-                let res;
                 try {
                     core.info(`Running: argocd ${command}`);
-                    res = yield argocd(command);
+                    // ArgoCD app diff will exit 1 if there is a diff, so always catch,
+                    // and then consider it a success if there's a diff in stdout
+                    // https://github.com/argoproj/argo-cd/issues/3588
+                    yield argocd(command);
+                }
+                catch (e) {
+                    const res = e;
                     core.info(`stdout: ${res.stdout}`);
                     core.info(`stderr: ${res.stderr}`);
                     if (res.stdout) {
                         diffs.push({ app, diff: res.stdout });
                     }
-                }
-                catch (e) {
+                    else {
+                        diffs.push({ app, diff: '', error: res.err });
+                    }
                     core.error(JSON.stringify(e));
-                    // diffs.push({ app, error: e, diff: '' }); // TEMP disable logging for now
-                    yield argocd(`${command} --loglevel debug`);
                 }
             }
             catch (e) {

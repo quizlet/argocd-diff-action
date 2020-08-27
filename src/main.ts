@@ -186,19 +186,22 @@ async function run(): Promise<void> {
   await asyncForEach(apps, async app => {
     try {
       const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
-      let res;
       try {
         core.info(`Running: argocd ${command}`);
-        res = await argocd(command);
+        // ArgoCD app diff will exit 1 if there is a diff, so always catch,
+        // and then consider it a success if there's a diff in stdout
+        // https://github.com/argoproj/argo-cd/issues/3588
+        await argocd(command);
+      } catch (e) {
+        const res = e as ExecResult;
         core.info(`stdout: ${res.stdout}`);
         core.info(`stderr: ${res.stderr}`);
         if (res.stdout) {
           diffs.push({ app, diff: res.stdout });
+        } else {
+          diffs.push({ app, diff: '', error: res.err });
         }
-      } catch (e) {
         core.error(JSON.stringify(e));
-        // diffs.push({ app, error: e, diff: '' }); // TEMP disable logging for now
-        await argocd(`${command} --loglevel debug`);
       }
     } catch (e) {
       core.info(JSON.stringify(e));
