@@ -3380,7 +3380,7 @@ const octokit = github.getOctokit(githubToken);
 function execCommand(command, options = { failingExitCode: 1 }) {
     return __awaiter(this, void 0, void 0, function* () {
         const p = new Promise((done, failed) => __awaiter(this, void 0, void 0, function* () {
-            child_process_1.exec(command, (err, stdout, stderr) => {
+            child_process_1.exec(command, options, (err, stdout, stderr) => {
                 const res = {
                     stdout,
                     stderr

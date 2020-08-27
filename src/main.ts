@@ -45,7 +45,7 @@ async function execCommand(
   options: { failingExitCode: number } & ExecOptions = { failingExitCode: 1 }
 ): Promise<ExecResult> {
   const p = new Promise<ExecResult>(async (done, failed) => {
-    exec(command, (err: ExecException | null, stdout: string, stderr: string): void => {
+    exec(command, options, (err: ExecException | null, stdout: string, stderr: string): void => {
       const res: ExecResult = {
         stdout,
         stderr
