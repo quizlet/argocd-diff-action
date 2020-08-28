@@ -3477,10 +3477,10 @@ ${diff}
 `);
         const output = scrubSecrets(`
 ## ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
-__Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })} PT__
+_Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })} PT_
   ${diffOutput.join('\n')}
-Legend:
-Sync Status: Synced ✅ - The App is synced in ArgoCD, and diffs you see are from this PR
+### Legend
+Sync Status: Synced ✅ - The app is synced in ArgoCD, and diffs you see are from this PR
 Sync Status: Out of Sync ⚠️ - The app is out of sync in ArgoCD. The diff you includes those changes in addition to any changes from this PR.
 
 YAML generation: Error 🛑 - There was an error generating the YAML for the app due to changes in this PR.
