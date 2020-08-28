@@ -110,7 +110,7 @@ async function getApps(): Promise<App[]> {
 interface Diff {
   app: App;
   diff: string;
-  error?: string;
+  error?: ExecResult;
 }
 async function postDiffComment(diffs: Diff[]): Promise<void> {
   const { owner, repo } = github.context.repo;
@@ -121,16 +121,26 @@ async function postDiffComment(diffs: Diff[]): Promise<void> {
 
   const diffOutput = diffs.map(
     ({ app, diff, error }) => `   
-
 Diff for App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applications/${
       app.metadata.name
-    }) ${error ? ' Error 🛑' : ''}
-App sync status: ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️'}
+    }) 
+YAML generation: ${error ? ' Error 🛑' : 'Success 🟢'}
+App sync status: ${
+      app.status.sync.status === 'Synced'
+        ? 'Synced ✅'
+        : 'Out of Sync ⚠️ - the diff you see includes unrelated changes, in addition to changes from this branch, if any.'
+    }
 ${
   error
     ? `
+\`stderr:\`
 \`\`\`
-${error}
+${error.stderr}
+\`\`\`
+
+\`err:\`
+\`\`\`
+${JSON.stringify(error.err)}
 \`\`\`
 `
     : ''
@@ -149,12 +159,12 @@ ${diff}
 `
     : ''
 }
-
+---
 `
   );
 
   const output = scrubSecrets(`
-ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
+### ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
   ${diffOutput.join('\n')}
 `);
 
@@ -219,10 +229,7 @@ async function run(): Promise<void> {
         diffs.push({
           app,
           diff: '',
-          error: `
-stderr: ${res.stderr}
-err: ${JSON.stringify(res.err)}
-          `
+          error: e
         });
       }
     }
