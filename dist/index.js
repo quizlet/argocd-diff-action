@@ -3444,13 +3444,19 @@ function postDiffComment(diffs) {
         const commitLink = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`;
         const shortCommitSha = String(sha).substr(0, 7);
         const diffOutput = diffs.map(({ app, diff, error }) => `   
-
-Diff for App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applications/${app.metadata.name}) ${error ? ' Error 🛑' : ''}
-App sync status: ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️'}
+App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applications/${app.metadata.name}) 
+YAML generation: ${error ? ' Error 🛑' : 'Success 🟢'}
+App sync status: ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️ '}
 ${error
             ? `
+**\`stderr:\`**
 \`\`\`
-${error}
+${error.stderr}
+\`\`\`
+
+**\`command:\`**
+\`\`\`json
+${JSON.stringify(error.err)}
 \`\`\`
 `
             : ''}
@@ -3466,11 +3472,17 @@ ${diff}
 </details>
 `
             : ''}
-
+---
 `);
         const output = scrubSecrets(`
-ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
+## ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
+_Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })} PT_
   ${diffOutput.join('\n')}
+### Legend
+Sync Status: Synced ✅ - The app is synced in ArgoCD, and diffs you see are from this PR
+Sync Status: Out of Sync ⚠️ - The app is out of sync in ArgoCD. The diff you includes those changes in addition to any changes from this PR.
+
+YAML generation: Error 🛑 - There was an error generating the YAML for the app due to changes in this PR.
 `);
         const commentsResponse = yield octokit.issues.listComments({
             issue_number: github.context.issue.number,
@@ -3531,10 +3543,7 @@ function run() {
                     diffs.push({
                         app,
                         diff: '',
-                        error: `
-stderr: ${res.stderr}
-err: ${JSON.stringify(res.err)}
-          `
+                        error: e
                     });
                 }
             }
