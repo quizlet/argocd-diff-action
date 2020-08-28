@@ -202,33 +202,29 @@ async function run(): Promise<void> {
   const diffs: Diff[] = [];
 
   await asyncForEach(apps, async app => {
+    const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
     try {
-      const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
-      try {
-        core.info(`Running: argocd ${command}`);
-        // ArgoCD app diff will exit 1 if there is a diff, so always catch,
-        // and then consider it a success if there's a diff in stdout
-        // https://github.com/argoproj/argo-cd/issues/3588
-        await argocd(command);
-      } catch (e) {
-        const res = e as ExecResult;
-        core.info(`stdout: ${res.stdout}`);
-        core.info(`stderr: ${res.stderr}`);
-        if (res.stdout) {
-          diffs.push({ app, diff: res.stdout });
-        } else {
-          diffs.push({
-            app,
-            diff: '',
-            error: `
+      core.info(`Running: argocd ${command}`);
+      // ArgoCD app diff will exit 1 if there is a diff, so always catch,
+      // and then consider it a success if there's a diff in stdout
+      // https://github.com/argoproj/argo-cd/issues/3588
+      await argocd(command);
+    } catch (e) {
+      const res = e as ExecResult;
+      core.info(`stdout: ${res.stdout}`);
+      core.info(`stderr: ${res.stderr}`);
+      if (res.stdout) {
+        diffs.push({ app, diff: res.stdout });
+      } else {
+        diffs.push({
+          app,
+          diff: '',
+          error: `
 stderr: ${res.stderr}
 err: ${JSON.stringify(res.err)}
           `
-          });
-        }
+        });
       }
-    } catch (e) {
-      core.info(JSON.stringify(e));
     }
   });
   await postDiffComment(diffs);

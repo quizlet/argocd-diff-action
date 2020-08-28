@@ -3512,36 +3512,31 @@ function run() {
         core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
         const diffs = [];
         yield asyncForEach(apps, (app) => __awaiter(this, void 0, void 0, function* () {
+            const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
             try {
-                const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
-                try {
-                    core.info(`Running: argocd ${command}`);
-                    // ArgoCD app diff will exit 1 if there is a diff, so always catch,
-                    // and then consider it a success if there's a diff in stdout
-                    // https://github.com/argoproj/argo-cd/issues/3588
-                    yield argocd(command);
+                core.info(`Running: argocd ${command}`);
+                // ArgoCD app diff will exit 1 if there is a diff, so always catch,
+                // and then consider it a success if there's a diff in stdout
+                // https://github.com/argoproj/argo-cd/issues/3588
+                yield argocd(command);
+            }
+            catch (e) {
+                const res = e;
+                core.info(`stdout: ${res.stdout}`);
+                core.info(`stderr: ${res.stderr}`);
+                if (res.stdout) {
+                    diffs.push({ app, diff: res.stdout });
                 }
-                catch (e) {
-                    const res = e;
-                    core.info(`stdout: ${res.stdout}`);
-                    core.info(`stderr: ${res.stderr}`);
-                    if (res.stdout) {
-                        diffs.push({ app, diff: res.stdout });
-                    }
-                    else {
-                        diffs.push({
-                            app,
-                            diff: '',
-                            error: `
+                else {
+                    diffs.push({
+                        app,
+                        diff: '',
+                        error: `
 stderr: ${res.stderr}
 err: ${JSON.stringify(res.err)}
           `
-                        });
-                    }
+                    });
                 }
-            }
-            catch (e) {
-                core.info(JSON.stringify(e));
             }
         }));
         yield postDiffComment(diffs);
