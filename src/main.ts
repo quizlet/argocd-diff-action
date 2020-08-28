@@ -1,6 +1,6 @@
 import * as core from '@actions/core';
 import * as tc from '@actions/tool-cache';
-import { exec, ExecException } from 'child_process';
+import { exec, ExecException, ExecOptions } from 'child_process';
 import * as github from '@actions/github';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -40,14 +40,14 @@ const EXTRA_CLI_ARGS = core.getInput('argocd-extra-cli-args');
 
 const octokit = github.getOctokit(githubToken);
 
-async function execCommand(command: string, failingExitCode = 1): Promise<ExecResult> {
+async function execCommand(command: string, options: ExecOptions = {}): Promise<ExecResult> {
   const p = new Promise<ExecResult>(async (done, failed) => {
-    exec(command, (err: ExecException | null, stdout: string, stderr: string): void => {
+    exec(command, options, (err: ExecException | null, stdout: string, stderr: string): void => {
       const res: ExecResult = {
         stdout,
         stderr
       };
-      if (err && err.code === failingExitCode) {
+      if (err) {
         res.err = err;
         failed(res);
         return;
@@ -56,6 +56,15 @@ async function execCommand(command: string, failingExitCode = 1): Promise<ExecRe
     });
   });
   return await p;
+}
+
+function scrubSecrets(input: string): string {
+  let output = input;
+  const authTokenMatches = input.match(/--auth-token=([\w.\S]+)/);
+  if (authTokenMatches) {
+    output = output.replace(new RegExp(authTokenMatches[1], 'g'), '***');
+  }
+  return output;
 }
 
 async function setupArgoCDCommand(): Promise<(params: string) => Promise<ExecResult>> {
@@ -70,8 +79,7 @@ async function setupArgoCDCommand(): Promise<(params: string) => Promise<ExecRes
 
   return async (params: string) =>
     execCommand(
-      `${argoBinaryPath} ${params} --auth-token=${ARGOCD_TOKEN} --server=${ARGOCD_SERVER_URL} ${EXTRA_CLI_ARGS}`,
-      2
+      `${argoBinaryPath} ${params} --auth-token=${ARGOCD_TOKEN} --server=${ARGOCD_SERVER_URL} ${EXTRA_CLI_ARGS}`
     );
 }
 
@@ -102,6 +110,7 @@ async function getApps(): Promise<App[]> {
 interface Diff {
   app: App;
   diff: string;
+  error?: string;
 }
 async function postDiffComment(diffs: Diff[]): Promise<void> {
   const { owner, repo } = github.context.repo;
@@ -111,10 +120,25 @@ async function postDiffComment(diffs: Diff[]): Promise<void> {
   const shortCommitSha = String(sha).substr(0, 7);
 
   const diffOutput = diffs.map(
-    ({ app, diff }) => `    
+    ({ app, diff, error }) => `   
+
 Diff for App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applications/${
       app.metadata.name
-    }) App sync status: ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️'}
+    }) ${error ? ' Error 🛑' : ''}
+App sync status: ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️'}
+${
+  error
+    ? `
+\`\`\`
+${error}
+\`\`\`
+`
+    : ''
+}
+
+${
+  diff
+    ? `
 <details>
 
 \`\`\`diff
@@ -122,14 +146,17 @@ ${diff}
 \`\`\`
 
 </details>
+`
+    : ''
+}
 
 `
   );
 
-  const output = `
+  const output = scrubSecrets(`
 ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
   ${diffOutput.join('\n')}
-`;
+`);
 
   const commentsResponse = await octokit.issues.listComments({
     issue_number: github.context.issue.number,
@@ -139,6 +166,7 @@ ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
 
   const existingComment = commentsResponse.data.find(d => d.body.includes('ArgoCD Diff for'));
 
+  // Existing comments should be updated even if there are no changes this round in order to indicate that
   if (existingComment) {
     octokit.issues.updateComment({
       owner,
@@ -146,7 +174,8 @@ ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
       comment_id: existingComment.id,
       body: output
     });
-  } else {
+    // Only post a new comment when there are changes
+  } else if (diffs.length) {
     octokit.issues.createComment({
       issue_number: github.context.issue.number,
       owner,
@@ -156,33 +185,53 @@ ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
   }
 }
 
+async function asyncForEach<T>(
+  array: T[],
+  callback: (item: T, i: number, arr: T[]) => Promise<void>
+): Promise<void> {
+  for (let index = 0; index < array.length; index++) {
+    await callback(array[index], index, array);
+  }
+}
+
 async function run(): Promise<void> {
   const argocd = await setupArgoCDCommand();
   const apps = await getApps();
   core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
 
-  const diffPromises = apps.map(async app => {
+  const diffs: Diff[] = [];
+
+  await asyncForEach(apps, async app => {
+    const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
     try {
-      const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
-      if (app.spec.source.helm) {
-        const pwd = await execCommand(`pwd`);
-        core.info(`pwd: ${pwd.stdout}`);
-        const output = await execCommand(`cd ${app.spec.source.path} && ls -al`);
-        core.info(`output: ${output.stdout}`);
-      }
-      const res = await argocd(command);
       core.info(`Running: argocd ${command}`);
-      core.info(`stdout: ${res.stdout}`);
-      core.info(`stdout: ${res.stderr}`);
-      if (res.stdout) {
-        return { app, diff: res.stdout };
-      }
+      // ArgoCD app diff will exit 1 if there is a diff, so always catch,
+      // and then consider it a success if there's a diff in stdout
+      // https://github.com/argoproj/argo-cd/issues/3588
+      await argocd(command);
     } catch (e) {
-      core.info(e);
+      const res = e as ExecResult;
+      core.info(`stdout: ${res.stdout}`);
+      core.info(`stderr: ${res.stderr}`);
+      if (res.stdout) {
+        diffs.push({ app, diff: res.stdout });
+      } else {
+        diffs.push({
+          app,
+          diff: '',
+          error: `
+stderr: ${res.stderr}
+err: ${JSON.stringify(res.err)}
+          `
+        });
+      }
     }
   });
-  const diffs = (await Promise.all(diffPromises)).filter(Boolean) as Diff[];
   await postDiffComment(diffs);
+  const diffsWithErrors = diffs.filter(d => d.error);
+  if (diffsWithErrors.length) {
+    core.setFailed(`ArgoCD diff failed: Encountered ${diffsWithErrors.length} errors`);
+  }
 }
 
 run();
