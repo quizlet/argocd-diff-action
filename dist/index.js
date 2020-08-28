@@ -3451,7 +3451,6 @@ ${error
             ? `
 **\`stderr:\`**
 \`\`\`
-
 ${error.stderr}
 \`\`\`
 
