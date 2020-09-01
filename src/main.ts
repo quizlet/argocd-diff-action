@@ -161,11 +161,12 @@ ${diff}
 ## ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
 _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })} PT_
   ${diffOutput.join('\n')}
-### Legend
-Sync Status: Synced ✅ - The app is synced in ArgoCD, and diffs you see are from this PR
-Sync Status: Out of Sync ⚠️ - The app is out of sync in ArgoCD. The diff you includes those changes in addition to any changes from this PR.
 
-YAML generation: Error 🛑 - There was an error generating the YAML for the app due to changes in this PR.
+| Legend | Status |
+| :---:  | :---   |
+| ✅     | The app is synced in ArgoCD, and diffs you see are solely from this PR. |
+| ⚠️      | The app is out-of-sync in ArgoCD, and the diffs you see include those changes plus any from this PR. |
+| 🛑     | There was an error generating the ArgoCD diffs due to changes in this PR. |
 `);
 
   const commentsResponse = await octokit.issues.listComments({
