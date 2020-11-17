@@ -3409,7 +3409,7 @@ function setupArgoCDCommand() {
         const argoBinaryPath = 'bin/argo';
         yield tc.downloadTool(`https://github.com/argoproj/argo-cd/releases/download/${VERSION}/argocd-${ARCH}-amd64`, argoBinaryPath);
         fs.chmodSync(path.join(argoBinaryPath), '755');
-        core.addPath(argoBinaryPath);
+        // core.addPath(argoBinaryPath);
         return (params) => __awaiter(this, void 0, void 0, function* () {
             return execCommand(`${argoBinaryPath} ${params} --auth-token=${ARGOCD_TOKEN} --server=${ARGOCD_SERVER_URL} ${EXTRA_CLI_ARGS}`);
         });

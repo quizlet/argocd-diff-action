@@ -75,7 +75,7 @@ async function setupArgoCDCommand(): Promise<(params: string) => Promise<ExecRes
   );
   fs.chmodSync(path.join(argoBinaryPath), '755');
 
-  core.addPath(argoBinaryPath);
+  // core.addPath(argoBinaryPath);
 
   return async (params: string) =>
     execCommand(
