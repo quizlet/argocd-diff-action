@@ -242,4 +242,4 @@ async function run(): Promise<void> {
   }
 }
 
-run();
+run().catch(e => core.setFailed(e.message));
