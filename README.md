@@ -34,7 +34,7 @@ jobs:
 
 # How it works
 1) Downloads the specified version of the ArgoCD binary, and makes it executable
-2) Connects to the ArgoCD api using the argocd token, and gets all the apps
+2) Connects to the ArgoCD API using the argocd token, and gets all the apps
 3) Filters the apps to the ones that live in the current repo
 3) Runs `argocd app diff` for each app
 5) Posts the diff output as a comment on the PR
