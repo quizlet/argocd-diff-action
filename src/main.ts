@@ -169,17 +169,17 @@ _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angele
 | 🛑     | There was an error generating the ArgoCD diffs due to changes in this PR. |
 `);
 
-  const commentsResponse = await octokit.issues.listComments({
+  const commentsResponse = await octokit.rest.issues.listComments({
     issue_number: github.context.issue.number,
     owner,
     repo
   });
 
-  const existingComment = commentsResponse.data.find(d => d.body.includes('ArgoCD Diff for'));
+  const existingComment = commentsResponse.data.find(d => d.body!.includes('ArgoCD Diff for'));
 
   // Existing comments should be updated even if there are no changes this round in order to indicate that
   if (existingComment) {
-    octokit.issues.updateComment({
+    octokit.rest.issues.updateComment({
       owner,
       repo,
       comment_id: existingComment.id,
@@ -187,7 +187,7 @@ _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angele
     });
     // Only post a new comment when there are changes
   } else if (diffs.length) {
-    octokit.issues.createComment({
+    octokit.rest.issues.createComment({
       issue_number: github.context.issue.number,
       owner,
       repo,
