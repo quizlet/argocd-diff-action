@@ -37,6 +37,7 @@ const ARGOCD_SERVER_URL = core.getInput('argocd-server-url');
 const ARGOCD_TOKEN = core.getInput('argocd-token');
 const VERSION = core.getInput('argocd-version');
 const EXTRA_CLI_ARGS = core.getInput('argocd-extra-cli-args');
+const ARGOCD_ENV = core.getInput('argocd-env');
 
 const octokit = github.getOctokit(githubToken);
 
@@ -158,7 +159,7 @@ ${diff}
   );
 
   const output = scrubSecrets(`
-## ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
+## ArgoCD Diff for ${ARGOCD_ENV} commit [\`${shortCommitSha}\`](${commitLink})
 _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })} PT_
   ${diffOutput.join('\n')}
 
@@ -175,7 +176,7 @@ _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angele
     repo
   });
 
-  const existingComment = commentsResponse.data.find(d => d.body!.includes('ArgoCD Diff for'));
+  const existingComment = commentsResponse.data.find(d => d.body!.includes('ArgoCD Diff for '+ARGOCD_ENV));
 
   // Existing comments should be updated even if there are no changes this round in order to indicate that
   if (existingComment) {

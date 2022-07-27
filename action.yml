@@ -19,6 +19,10 @@ inputs:
     description: Extra arguments to pass to the argocd CLI
     default: --grpc-web
     required: false
+  argocd-env: 
+    description: ArgoCD Environment
+    default: prod
+    required: false  
 runs:
   using: 'node12'
   main: 'dist/index.js'
