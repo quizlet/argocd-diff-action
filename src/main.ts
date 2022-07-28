@@ -160,7 +160,7 @@ ${diff}
 
   const output = scrubSecrets(`
 ## ArgoCD Diff for ${ARGOCD_ENV} commit [\`${shortCommitSha}\`](${commitLink})
-_Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })} PT_
+_Updated at ${new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })} IST_
   ${diffOutput.join('\n')}
 
 | Legend | Status |
