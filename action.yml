@@ -19,6 +19,9 @@ inputs:
     description: Extra arguments to pass to the argocd CLI
     default: --grpc-web
     required: false
+  github-password:
+    description: "PAT to use for argocd plugin download"
+    required: true
 runs:
   using: 'node12'
   main: 'dist/index.js'

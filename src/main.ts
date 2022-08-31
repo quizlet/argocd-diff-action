@@ -37,6 +37,7 @@ const ARGOCD_SERVER_URL = core.getInput('argocd-server-url');
 const ARGOCD_TOKEN = core.getInput('argocd-token');
 const VERSION = core.getInput('argocd-version');
 const EXTRA_CLI_ARGS = core.getInput('argocd-extra-cli-args');
+const GITHUB_PASSWORD = core.getInput('github-password');
 
 const octokit = github.getOctokit(githubToken);
 
@@ -75,7 +76,34 @@ async function setupArgoCDCommand(): Promise<(params: string) => Promise<ExecRes
   );
   fs.chmodSync(path.join(argoBinaryPath), '755');
 
-  // core.addPath(argoBinaryPath);
+  const octokit_admin = github.getOctokit(GITHUB_PASSWORD);
+
+  core.info('Fetching argocd-lovely-plugin releases');
+  const argocdLovelyPluginRelease = await octokit_admin.rest.repos.getLatestRelease({
+    owner: 'getprotocollab',
+    repo: 'argocd-lovely-plugin'
+  });
+
+  core.info(`Found release: ${argocdLovelyPluginRelease.data.name}`);
+  const re = new RegExp(`.*-linux-amd64.tar.gz`);
+
+  const asset = argocdLovelyPluginRelease.data.assets.find(obj => {
+    return re.test(obj.name);
+  });
+
+  const pluginArchivePath = await tc.downloadTool(
+    asset!.url,
+    undefined,
+    `token ${GITHUB_PASSWORD}`,
+    {
+      accept: 'application/octet-stream'
+    }
+  );
+
+  const pluginExtractedFolder = await tc.extractTar(pluginArchivePath);
+  fs.chmodSync(path.join(pluginExtractedFolder, 'argocd-lovely-plugin'), 755);
+
+  core.addPath(pluginExtractedFolder);
 
   return async (params: string) =>
     execCommand(
@@ -99,10 +127,8 @@ async function getApps(): Promise<App[]> {
   }
 
   return (responseJson.items as App[]).filter(app => {
-    return (
-      app.spec.source.repoURL.includes(
-        `${github.context.repo.owner}/${github.context.repo.repo}`
-      )
+    return app.spec.source.repoURL.includes(
+      `${github.context.repo.owner}/${github.context.repo.repo}`
     );
   });
 }
