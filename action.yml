@@ -12,16 +12,16 @@ inputs:
     description: ArgoCD Version
     default: v1.6.1
     required: false
-  github-token: 
-    description: Github Token
-    required: true
   argocd-extra-cli-args: 
     description: Extra arguments to pass to the argocd CLI
     default: --grpc-web
     required: false
-  github-password:
-    description: "PAT to use for argocd plugin download"
-    required: true
+  argocd-lovely-plugin-token:
+    description: "token to use for downloading the argocd-lovely plugin"
+    required: true    
+  github-token: 
+    description: Github Token
+    required: true    
 runs:
   using: 'node12'
   main: 'dist/index.js'

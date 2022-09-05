@@ -1698,7 +1698,7 @@ const ARGOCD_SERVER_URL = core.getInput('argocd-server-url');
 const ARGOCD_TOKEN = core.getInput('argocd-token');
 const VERSION = core.getInput('argocd-version');
 const EXTRA_CLI_ARGS = core.getInput('argocd-extra-cli-args');
-const GITHUB_PASSWORD = core.getInput('github-password');
+const ARGOCD_LOVELY_PLUGIN_TOKEN = core.getInput('argocd-lovely-plugin-token');
 const octokit = github.getOctokit(githubToken);
 function execCommand(command, options = {}) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -1732,7 +1732,7 @@ function setupArgoCDCommand() {
         const argoBinaryPath = 'bin/argo';
         yield tc.downloadTool(`https://github.com/argoproj/argo-cd/releases/download/${VERSION}/argocd-${ARCH}-amd64`, argoBinaryPath);
         fs.chmodSync(path.join(argoBinaryPath), '755');
-        const octokit_admin = github.getOctokit(GITHUB_PASSWORD);
+        const octokit_admin = github.getOctokit(ARGOCD_LOVELY_PLUGIN_TOKEN);
         core.info('Fetching argocd-lovely-plugin releases');
         const argocdLovelyPluginRelease = yield octokit_admin.rest.repos.getLatestRelease({
             owner: 'getprotocollab',
@@ -1743,7 +1743,7 @@ function setupArgoCDCommand() {
         const asset = argocdLovelyPluginRelease.data.assets.find(obj => {
             return re.test(obj.name);
         });
-        const pluginArchivePath = yield tc.downloadTool(asset.url, undefined, `token ${GITHUB_PASSWORD}`, {
+        const pluginArchivePath = yield tc.downloadTool(asset.url, undefined, `token ${ARGOCD_LOVELY_PLUGIN_TOKEN}`, {
             accept: 'application/octet-stream'
         });
         const pluginExtractedFolder = yield tc.extractTar(pluginArchivePath);
