@@ -1,0 +1,22 @@
+name: PR Commit Signed Check
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  check_commits:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Checks Commits Signing
+        uses: soxhub/pr_sig_check@v1.1.0
+        with:
+          domaincheck: "soxhub.com,auditboard.com"
+          notifyonly: "yes"
+          customurl: "Confluence;https://auditboard.atlassian.net/wiki/spaces/SECTEAM/pages/1121550386/Cryptographically+Signing+Commits+with+Github"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
