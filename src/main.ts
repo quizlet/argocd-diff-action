@@ -102,7 +102,8 @@ async function getApps(): Promise<App[]> {
     return (
       app.spec.source.repoURL.includes(
         `${github.context.repo.owner}/${github.context.repo.repo}`
-      ) && (app.spec.source.targetRevision === 'master' || app.spec.source.targetRevision === 'main')
+      ) &&
+      (app.spec.source.targetRevision === 'master' || app.spec.source.targetRevision === 'main')
     );
   });
 }
