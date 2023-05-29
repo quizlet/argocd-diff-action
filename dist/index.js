@@ -2379,16 +2379,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 const core = __importStar(__webpack_require__(470));
 const github = __importStar(__webpack_require__(469));
 const tc = __importStar(__webpack_require__(533));
 const child_process_1 = __webpack_require__(129);
 const fs = __importStar(__webpack_require__(747));
-const node_fetch_1 = __importDefault(__webpack_require__(454));
 const path = __importStar(__webpack_require__(622));
 const ARCH = process.env.ARCH || 'linux';
 const githubToken = core.getInput('github-token');
@@ -2436,26 +2432,25 @@ function setupArgoCDCommand() {
         });
     });
 }
-function getApps() {
+function getApps(argocd) {
     return __awaiter(this, void 0, void 0, function* () {
-        const url = `https://${ARGOCD_SERVER_URL}/api/v1/applications?fields=items.metadata.name,items.spec,items.status.sync.status`;
-        core.info(`Fetching apps from: ${url}`);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let responseJson;
+        core.info(`Getting list of apps for the repository ${github.context.repo.owner}/${github.context.repo.repo}`);
+        let apps = new Array();
+        let command = `app list -o json -r git@github.com:${github.context.repo.owner}/${github.context.repo.repo}`;
         try {
-            const response = yield node_fetch_1.default(url, {
-                method: 'GET',
-                headers: { Cookie: `argocd.token=${ARGOCD_TOKEN}` }
-            });
-            responseJson = yield response.json();
+            const res = yield argocd(command);
+            if (res.stdout) {
+                apps = JSON.parse(res.stdout);
+            }
+            else {
+                core.error(`Error in response of app list command, response is: ${res}`);
+            }
         }
         catch (e) {
+            core.error(`Error when running command: ${command}`);
             core.error(e);
         }
-        return responseJson.items.filter(app => {
-            return (app.spec.source.repoURL.includes(`${github.context.repo.owner}/${github.context.repo.repo}`) &&
-                (app.spec.source.targetRevision === 'master' || app.spec.source.targetRevision === 'main'));
-        });
+        return apps.filter(app => app.spec.source.targetRevision === 'master' || app.spec.source.targetRevision === 'main');
     });
 }
 function postDiffComment(diffs) {
@@ -2543,7 +2538,11 @@ function asyncForEach(array, callback) {
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         const argocd = yield setupArgoCDCommand();
-        const apps = yield getApps();
+        const apps = yield getApps(argocd);
+        if (apps.length === 0) {
+            core.error(`No apps found for repo: ${github.context.repo.owner}/${github.context.repo.repo} with target revision "master" or "main"`);
+            return;
+        }
         core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
         const diffs = [];
         yield asyncForEach(apps, (app) => __awaiter(this, void 0, void 0, function* () {
