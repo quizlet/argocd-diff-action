@@ -1,5 +1,6 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
+import * as tc from '@actions/tool-cache';
 import { exec, ExecException, ExecOptions } from 'child_process';
 import * as fs from 'fs';
 import nodeFetch from 'node-fetch';
