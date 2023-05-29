@@ -207,7 +207,7 @@ async function run(): Promise<void> {
   const argocd = await setupArgoCDCommand();
   const apps = await getApps(argocd);
   if (apps.length === 0) {
-    core.error(
+    core.setFailed(
       `No apps found for repo: ${github.context.repo.owner}/${github.context.repo.repo} with target revision "master" or "main"`
     );
     return;
