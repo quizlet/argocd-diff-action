@@ -4,6 +4,8 @@ This action generates a diff between the current PR and the current state of the
 
 Note that this includes any changes between your branch and latest `master`, as well as ways in which the cluster is out of sync. 
 
+This is a fork of the original [argocd-diff-action](https://github.com/quizlet/argocd-diff-action) repository. This fork was created to update the github action in order for it to work with more recent versions of ArgoCD (v2.0.5) by removing the API call to get the list of ArgoCD apps and using the CLI instead.
+
 ## Usage
 
 Example GH action:
