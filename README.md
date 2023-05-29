@@ -23,7 +23,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v2
 
-      - uses: quizlet/argocd-diff-action@master
+      - uses: lalalilo/argocd-diff-action@master
         name: ArgoCD Diff
         with:
           argocd-server-url: argocd.example.com

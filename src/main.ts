@@ -1,10 +1,9 @@
 import * as core from '@actions/core';
-import * as tc from '@actions/tool-cache';
-import { exec, ExecException, ExecOptions } from 'child_process';
 import * as github from '@actions/github';
+import { exec, ExecException, ExecOptions } from 'child_process';
 import * as fs from 'fs';
-import * as path from 'path';
 import nodeFetch from 'node-fetch';
+import * as path from 'path';
 
 interface ExecResult {
   err?: Error | undefined;
@@ -84,7 +83,7 @@ async function setupArgoCDCommand(): Promise<(params: string) => Promise<ExecRes
 }
 
 async function getApps(): Promise<App[]> {
-  const url = `https://${ARGOCD_SERVER_URL}/api/v1/applications?fields=items.metadata.name,items.spec.source.path,items.spec.source.repoURL,items.spec.source.targetRevision,items.spec.source.helm,items.spec.source.kustomize,items.status.sync.status`;
+  const url = `https://${ARGOCD_SERVER_URL}/api/v1/applications?fields=items.metadata.name,items.spec,items.status.sync.status`;
   core.info(`Fetching apps from: ${url}`);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let responseJson: any;
@@ -102,7 +101,8 @@ async function getApps(): Promise<App[]> {
     return (
       app.spec.source.repoURL.includes(
         `${github.context.repo.owner}/${github.context.repo.repo}`
-      ) && (app.spec.source.targetRevision === 'master' || app.spec.source.targetRevision === 'main')
+      ) &&
+      (app.spec.source.targetRevision === 'master' || app.spec.source.targetRevision === 'main')
     );
   });
 }
