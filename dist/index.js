@@ -2540,13 +2540,13 @@ function run() {
         const argocd = yield setupArgoCDCommand();
         const apps = yield getApps(argocd);
         if (apps.length === 0) {
-            core.error(`No apps found for repo: ${github.context.repo.owner}/${github.context.repo.repo} with target revision "master" or "main"`);
+            core.setFailed(`No apps found for repo: ${github.context.repo.owner}/${github.context.repo.repo} with target revision "master" or "main"`);
             return;
         }
         core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
         const diffs = [];
         yield asyncForEach(apps, (app) => __awaiter(this, void 0, void 0, function* () {
-            const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
+            const command = `app diff ${app.metadata.name} --local=${app.spec.source.path} --server-side-generate`;
             try {
                 core.info(`Running: argocd ${command}`);
                 // ArgoCD app diff will exit 1 if there is a diff, so always catch,
