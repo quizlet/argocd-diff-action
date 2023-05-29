@@ -1,10 +1,9 @@
 import * as core from '@actions/core';
-import * as tc from '@actions/tool-cache';
-import { exec, ExecException, ExecOptions } from 'child_process';
 import * as github from '@actions/github';
+import { exec, ExecException, ExecOptions } from 'child_process';
 import * as fs from 'fs';
-import * as path from 'path';
 import nodeFetch from 'node-fetch';
+import * as path from 'path';
 
 interface ExecResult {
   err?: Error | undefined;
@@ -102,7 +101,8 @@ async function getApps(): Promise<App[]> {
     return (
       app.spec.source.repoURL.includes(
         `${github.context.repo.owner}/${github.context.repo.repo}`
-      ) && (app.spec.source.targetRevision === 'master' || app.spec.source.targetRevision === 'main')
+      ) &&
+      (app.spec.source.targetRevision === 'master' || app.spec.source.targetRevision === 'main')
     );
   });
 }
