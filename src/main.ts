@@ -208,7 +208,13 @@ async function asyncForEach<T>(
 
 async function run(): Promise<void> {
   const argocd = await setupArgoCDCommand();
-  const apps = await getApps();
+  const apps = await getApps(argocd);
+  if (apps.length === 0) {
+    core.error(
+      `No apps found for repo: ${github.context.repo.owner}/${github.context.repo.repo} with target revision "master" or "main"`
+    );
+    return;
+  }
   core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
 
   const diffs: Diff[] = [];
