@@ -84,7 +84,7 @@ async function setupArgoCDCommand(): Promise<(params: string) => Promise<ExecRes
 }
 
 async function getApps(): Promise<App[]> {
-  const url = `https://${ARGOCD_SERVER_URL}/api/v1/applications?fields=items.metadata.name,items.spec.source.path,items.spec.source.repoURL,items.spec.source.targetRevision,items.spec.source.helm,items.spec.source.kustomize,items.status.sync.status`;
+  const url = `https://${ARGOCD_SERVER_URL}/api/v1/applications?fields=items.metadata.name,items.spec,items.status.sync.status`;
   core.info(`Fetching apps from: ${url}`);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let responseJson: any;
