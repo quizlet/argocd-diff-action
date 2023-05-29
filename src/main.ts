@@ -3,7 +3,6 @@ import * as github from '@actions/github';
 import * as tc from '@actions/tool-cache';
 import { exec, ExecException, ExecOptions } from 'child_process';
 import * as fs from 'fs';
-import nodeFetch from 'node-fetch';
 import * as path from 'path';
 
 interface ExecResult {
@@ -83,29 +82,27 @@ async function setupArgoCDCommand(): Promise<(params: string) => Promise<ExecRes
     );
 }
 
-async function getApps(): Promise<App[]> {
-  const url = `https://${ARGOCD_SERVER_URL}/api/v1/applications?fields=items.metadata.name,items.spec,items.status.sync.status`;
-  core.info(`Fetching apps from: ${url}`);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let responseJson: any;
+async function getApps(argocd: (params: string) => Promise<ExecResult>): Promise<App[]> {
+  core.info(
+    `Getting list of apps for the repository ${github.context.repo.owner}/${github.context.repo.repo}`
+  );
+  let apps = new Array<App>();
+  let command = `app list -o json -r git@github.com:${github.context.repo.owner}/${github.context.repo.repo}`;
+
   try {
-    const response = await nodeFetch(url, {
-      method: 'GET',
-      headers: { Cookie: `argocd.token=${ARGOCD_TOKEN}` }
-    });
-    responseJson = await response.json();
+    const res = await argocd(command);
+    if (res.stdout) {
+      apps = JSON.parse(res.stdout);
+    } else {
+      core.error(`Error in response of app list command, response is: ${res}`);
+    }
   } catch (e) {
+    core.error(`Error when running command: ${command}`);
     core.error(e);
   }
-
-  return (responseJson.items as App[]).filter(app => {
-    return (
-      app.spec.source.repoURL.includes(
-        `${github.context.repo.owner}/${github.context.repo.repo}`
-      ) &&
-      (app.spec.source.targetRevision === 'master' || app.spec.source.targetRevision === 'main')
-    );
-  });
+  return apps.filter(
+    app => app.spec.source.targetRevision === 'master' || app.spec.source.targetRevision === 'main'
+  );
 }
 
 interface Diff {
