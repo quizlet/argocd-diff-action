@@ -1697,7 +1697,12 @@ core.info(githubToken);
 const ARGOCD_SERVER_URL = core.getInput('argocd-server-url');
 const ARGOCD_TOKEN = core.getInput('argocd-token');
 const VERSION = core.getInput('argocd-version');
-const EXTRA_CLI_ARGS = core.getInput('argocd-extra-cli-args');
+const ENV = core.getInput('environment');
+const PLAINTEXT = core.getInput('plaintext').toLowerCase() === "true";
+let EXTRA_CLI_ARGS = core.getInput('argocd-extra-cli-args');
+if (PLAINTEXT) {
+    EXTRA_CLI_ARGS += ' --plaintext';
+}
 const octokit = github.getOctokit(githubToken);
 function execCommand(command, options = {}) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -1739,7 +1744,11 @@ function setupArgoCDCommand() {
 }
 function getApps() {
     return __awaiter(this, void 0, void 0, function* () {
-        const url = `https://${ARGOCD_SERVER_URL}/api/v1/applications?fields=items.metadata.name,items.spec.source.path,items.spec.source.repoURL,items.spec.source.targetRevision,items.spec.source.helm,items.spec.source.kustomize,items.status.sync.status`;
+        let protocol = 'https';
+        if (PLAINTEXT) {
+            protocol = 'http';
+        }
+        const url = `${protocol}://${ARGOCD_SERVER_URL}/api/v1/applications`;
         core.info(`Fetching apps from: ${url}`);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let responseJson;
@@ -1754,7 +1763,8 @@ function getApps() {
             core.error(e);
         }
         return responseJson.items.filter(app => {
-            return (app.spec.source.repoURL.includes(`${github.context.repo.owner}/${github.context.repo.repo}`) && (app.spec.source.targetRevision === 'master' || app.spec.source.targetRevision === 'main'));
+            const targetPrimary = app.spec.source.targetRevision === 'master' || app.spec.source.targetRevision === 'main';
+            return (app.spec.source.repoURL.includes(`${github.context.repo.owner}/${github.context.repo.repo}`) && targetPrimary);
         });
     });
 }
@@ -1797,7 +1807,7 @@ ${diff}
 ---
 `);
         const output = scrubSecrets(`
-## ArgoCD Diff for commit [\`${shortCommitSha}\`](${commitLink})
+## ArgoCD Diff on ${ENV} for commit [\`${shortCommitSha}\`](${commitLink})
 _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })} PT_
   ${diffOutput.join('\n')}
 
@@ -1807,23 +1817,8 @@ _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angele
 | ⚠️      | The app is out-of-sync in ArgoCD, and the diffs you see include those changes plus any from this PR. |
 | 🛑     | There was an error generating the ArgoCD diffs due to changes in this PR. |
 `);
-        const commentsResponse = yield octokit.rest.issues.listComments({
-            issue_number: github.context.issue.number,
-            owner,
-            repo
-        });
-        const existingComment = commentsResponse.data.find(d => d.body.includes('ArgoCD Diff for'));
-        // Existing comments should be updated even if there are no changes this round in order to indicate that
-        if (existingComment) {
-            octokit.rest.issues.updateComment({
-                owner,
-                repo,
-                comment_id: existingComment.id,
-                body: output
-            });
-            // Only post a new comment when there are changes
-        }
-        else if (diffs.length) {
+        // Only post a new comment when there are changes
+        if (diffs.length) {
             octokit.rest.issues.createComment({
                 issue_number: github.context.issue.number,
                 owner,

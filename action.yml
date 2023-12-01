@@ -4,7 +4,8 @@ author: 'Quizlet'
 inputs:
   argocd-server-url: 
     description: ArgoCD server url (without the protocol)
-    required: true
+    default: argo-cd-argocd-server.argo-cd
+    required: false
   argocd-token: 
     description: ArgoCD token for a local or project-scoped user https://argoproj.github.io/argo-cd/operator-manual/user-management/#local-usersaccounts-v15
     required: true
@@ -18,6 +19,14 @@ inputs:
   argocd-extra-cli-args: 
     description: Extra arguments to pass to the argocd CLI
     default: --grpc-web
+    required: false
+  plaintext: 
+    description: Whether to use HTTPS
+    default: 'false'
+    required: false
+  environment: 
+    description: Name of env to use in the diff title posted to the PR
+    default: legacy
     required: false
 runs:
   using: 'node12'
