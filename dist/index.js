@@ -1763,18 +1763,20 @@ function getApps() {
             core.error(e);
         }
         return responseJson.items.filter(app => {
-            const targetPrimary = app.spec.source.targetRevision === 'master' || app.spec.source.targetRevision === 'main';
+            const targetRevision = app.spec.source.targetRevision;
+            const targetPrimary = targetRevision === 'master' || targetRevision === 'main' || !targetRevision;
             return (app.spec.source.repoURL.includes(`${github.context.repo.owner}/${github.context.repo.repo}`) && targetPrimary);
         });
     });
 }
 function postDiffComment(diffs) {
-    var _a, _b;
+    var _a, _b, _c;
     return __awaiter(this, void 0, void 0, function* () {
         const { owner, repo } = github.context.repo;
         const sha = (_b = (_a = github.context.payload.pull_request) === null || _a === void 0 ? void 0 : _a.head) === null || _b === void 0 ? void 0 : _b.sha;
         const commitLink = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`;
         const shortCommitSha = String(sha).substr(0, 7);
+        const prefixHeader = `## ArgoCD Diff on ${ENV}`;
         const diffOutput = diffs.map(({ app, diff, error }) => `   
 App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applications/${app.metadata.name}) 
 YAML generation: ${error ? ' Error 🛑' : 'Success 🟢'}
@@ -1807,7 +1809,7 @@ ${diff}
 ---
 `);
         const output = scrubSecrets(`
-## ArgoCD Diff on ${ENV} for commit [\`${shortCommitSha}\`](${commitLink})
+${prefixHeader} for commit [\`${shortCommitSha}\`](${commitLink})
 _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })} PT_
   ${diffOutput.join('\n')}
 
@@ -1817,6 +1819,25 @@ _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angele
 | ⚠️      | The app is out-of-sync in ArgoCD, and the diffs you see include those changes plus any from this PR. |
 | 🛑     | There was an error generating the ArgoCD diffs due to changes in this PR. |
 `);
+        const commentsResponse = yield octokit.rest.issues.listComments({
+            issue_number: github.context.issue.number,
+            owner,
+            repo
+        });
+        // Delete stale comments
+        for (const comment of commentsResponse.data) {
+            core.info(`analyzing comment: ${comment.id}`);
+            core.info(`analyzing comment body: ${comment.body}`);
+            core.info(`looking for ${prefixHeader}`);
+            if ((_c = comment.body) === null || _c === void 0 ? void 0 : _c.includes(prefixHeader)) {
+                core.info(`deleting comment ${comment.id}`);
+                octokit.rest.issues.deleteComment({
+                    owner,
+                    repo,
+                    comment_id: comment.id,
+                });
+            }
+        }
         // Only post a new comment when there are changes
         if (diffs.length) {
             octokit.rest.issues.createComment({
@@ -1870,6 +1891,45 @@ function run() {
         const diffsWithErrors = diffs.filter(d => d.error);
         if (diffsWithErrors.length) {
             core.setFailed(`ArgoCD diff failed: Encountered ${diffsWithErrors.length} errors`);
+        }
+    });
+}
+const core_1 = __webpack_require__(448);
+function deleteComments(includes) {
+    var _a, _b;
+    return __awaiter(this, void 0, void 0, function* () {
+        const octokit = new core_1.Octokit({ auth: githubToken });
+        const context = github.context;
+        if (context.payload.pull_request == null) {
+            core.setFailed('No pull request found.');
+            return;
+        }
+        const owner = context.repo.owner;
+        const repo = context.repo.repo;
+        const issue_number = (_a = context.payload.issue) === null || _a === void 0 ? void 0 : _a.number;
+        try {
+            // List comments
+            if (issue_number) {
+                const { data: comments } = yield octokit.request('GET /repos/{owner}/{repo}/issues/{issue_number}/comments', {
+                    owner,
+                    repo,
+                    issue_number
+                });
+                // Loop through comments and delete if they contain the specific string
+                for (const comment of comments) {
+                    if ((_b = comment.body) === null || _b === void 0 ? void 0 : _b.includes(includes)) {
+                        yield octokit.request('DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}', {
+                            owner,
+                            repo,
+                            comment_id: comment.id
+                        });
+                        console.log(`Deleted comment ${comment.id}`);
+                    }
+                }
+            }
+        }
+        catch (error) {
+            core.setFailed(`Error: ${error.message}`);
         }
     });
 }

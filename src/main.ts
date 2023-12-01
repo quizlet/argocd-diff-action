@@ -108,7 +108,8 @@ async function getApps(): Promise<App[]> {
   }
 
   return (responseJson.items as App[]).filter(app => {
-    const targetPrimary = app.spec.source.targetRevision === 'master' || app.spec.source.targetRevision === 'main'
+    const targetRevision = app.spec.source.targetRevision
+    const targetPrimary = targetRevision === 'master' || targetRevision === 'main' || !targetRevision
     return (
       app.spec.source.repoURL.includes(
         `${github.context.repo.owner}/${github.context.repo.repo}`
@@ -129,6 +130,7 @@ async function postDiffComment(diffs: Diff[]): Promise<void> {
   const commitLink = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`;
   const shortCommitSha = String(sha).substr(0, 7);
 
+  const prefixHeader = `## ArgoCD Diff on ${ENV}`
   const diffOutput = diffs.map(
     ({ app, diff, error }) => `   
 App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applications/${app.metadata.name}) 
@@ -168,7 +170,7 @@ ${diff}
   );
 
   const output = scrubSecrets(`
-## ArgoCD Diff on ${ENV} for commit [\`${shortCommitSha}\`](${commitLink})
+${prefixHeader} for commit [\`${shortCommitSha}\`](${commitLink})
 _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })} PT_
   ${diffOutput.join('\n')}
 
@@ -178,6 +180,27 @@ _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angele
 | ⚠️      | The app is out-of-sync in ArgoCD, and the diffs you see include those changes plus any from this PR. |
 | 🛑     | There was an error generating the ArgoCD diffs due to changes in this PR. |
 `);
+
+  const commentsResponse = await octokit.rest.issues.listComments({
+    issue_number: github.context.issue.number,
+    owner,
+    repo
+  });
+
+  // Delete stale comments
+  for (const comment of commentsResponse.data) {
+    core.info(`analyzing comment: ${comment.id}`)
+    core.info(`analyzing comment body: ${comment.body}`)
+    core.info(`looking for ${prefixHeader}`)
+    if (comment.body?.includes(prefixHeader)) {
+      core.info(`deleting comment ${comment.id}`)
+      octokit.rest.issues.deleteComment({
+        owner,
+        repo,
+        comment_id: comment.id,
+      });
+    }
+  }
 
   // Only post a new comment when there are changes
   if (diffs.length) {
@@ -233,6 +256,47 @@ async function run(): Promise<void> {
   const diffsWithErrors = diffs.filter(d => d.error);
   if (diffsWithErrors.length) {
     core.setFailed(`ArgoCD diff failed: Encountered ${diffsWithErrors.length} errors`);
+  }
+}
+
+import { Octokit } from '@octokit/core';
+
+async function deleteComments(includes: string) {
+  const octokit = new Octokit({ auth: githubToken });
+
+  const context = github.context;
+  if (context.payload.pull_request == null) {
+    core.setFailed('No pull request found.');
+    return;
+  }
+
+  const owner = context.repo.owner;
+  const repo = context.repo.repo;
+  const issue_number = context.payload.issue?.number;
+
+  try {
+    // List comments
+    if (issue_number) {
+      const { data: comments } = await octokit.request('GET /repos/{owner}/{repo}/issues/{issue_number}/comments', {
+        owner,
+        repo,
+        issue_number
+      });
+
+      // Loop through comments and delete if they contain the specific string
+      for (const comment of comments) {
+        if (comment.body?.includes(includes)) {
+          await octokit.request('DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}', {
+            owner,
+            repo,
+            comment_id: comment.id
+          });
+          console.log(`Deleted comment ${comment.id}`);
+        }
+      }
+    }
+  } catch (error) {
+    core.setFailed(`Error: ${error.message}`);
   }
 }
 
