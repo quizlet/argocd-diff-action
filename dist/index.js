@@ -1826,9 +1826,6 @@ _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angele
         });
         // Delete stale comments
         for (const comment of commentsResponse.data) {
-            core.info(`analyzing comment: ${comment.id}`);
-            core.info(`analyzing comment body: ${comment.body}`);
-            core.info(`looking for ${prefixHeader}`);
             if ((_c = comment.body) === null || _c === void 0 ? void 0 : _c.includes(prefixHeader)) {
                 core.info(`deleting comment ${comment.id}`);
                 octokit.rest.issues.deleteComment({
