@@ -1894,46 +1894,6 @@ function run() {
         }
     });
 }
-const core_1 = __webpack_require__(448);
-function deleteComments(includes) {
-    var _a, _b;
-    return __awaiter(this, void 0, void 0, function* () {
-        const octokit = new core_1.Octokit({ auth: githubToken });
-        const context = github.context;
-        if (context.payload.pull_request == null) {
-            core.setFailed('No pull request found.');
-            return;
-        }
-        const owner = context.repo.owner;
-        const repo = context.repo.repo;
-        const issue_number = (_a = context.payload.issue) === null || _a === void 0 ? void 0 : _a.number;
-        try {
-            // List comments
-            if (issue_number) {
-                const { data: comments } = yield octokit.request('GET /repos/{owner}/{repo}/issues/{issue_number}/comments', {
-                    owner,
-                    repo,
-                    issue_number
-                });
-                // Loop through comments and delete if they contain the specific string
-                for (const comment of comments) {
-                    if ((_b = comment.body) === null || _b === void 0 ? void 0 : _b.includes(includes)) {
-                        yield octokit.request('DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}', {
-                            owner,
-                            repo,
-                            comment_id: comment.id
-                        });
-                        console.log(`Deleted comment ${comment.id}`);
-                    }
-                }
-            }
-        }
-        catch (error) {
-            core.setFailed(`Error: ${error.message}`);
-        }
-    });
-}
-run().catch(e => core.setFailed(e.message));
 
 
 /***/ }),
