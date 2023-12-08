@@ -108,7 +108,8 @@ async function getApps(): Promise<App[]> {
   }
 
   return (responseJson.items as App[]).filter(app => {
-    const targetPrimary = app.spec.source.targetRevision === 'master' || app.spec.source.targetRevision === 'main'
+    const targetRevision = app.spec.source.targetRevision
+    const targetPrimary = targetRevision === 'master' || targetRevision === 'main' || !targetRevision
     return (
       app.spec.source.repoURL.includes(
         `${github.context.repo.owner}/${github.context.repo.repo}`
@@ -129,6 +130,7 @@ async function postDiffComment(diffs: Diff[]): Promise<void> {
   const commitLink = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`;
   const shortCommitSha = String(sha).substr(0, 7);
 
+  const prefixHeader = `## ArgoCD Diff on ${ENV}`
   const diffOutput = diffs.map(
     ({ app, diff, error }) => `   
 App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applications/${app.metadata.name}) 
@@ -168,7 +170,7 @@ ${diff}
   );
 
   const output = scrubSecrets(`
-## ArgoCD Diff on ${ENV} for commit [\`${shortCommitSha}\`](${commitLink})
+${prefixHeader} for commit [\`${shortCommitSha}\`](${commitLink})
 _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })} PT_
   ${diffOutput.join('\n')}
 
@@ -178,6 +180,24 @@ _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angele
 | ⚠️      | The app is out-of-sync in ArgoCD, and the diffs you see include those changes plus any from this PR. |
 | 🛑     | There was an error generating the ArgoCD diffs due to changes in this PR. |
 `);
+
+  const commentsResponse = await octokit.rest.issues.listComments({
+    issue_number: github.context.issue.number,
+    owner,
+    repo
+  });
+
+  // Delete stale comments
+  for (const comment of commentsResponse.data) {
+    if (comment.body?.includes(prefixHeader)) {
+      core.info(`deleting comment ${comment.id}`)
+      octokit.rest.issues.deleteComment({
+        owner,
+        repo,
+        comment_id: comment.id,
+      });
+    }
+  }
 
   // Only post a new comment when there are changes
   if (diffs.length) {
@@ -235,5 +255,3 @@ async function run(): Promise<void> {
     core.setFailed(`ArgoCD diff failed: Encountered ${diffsWithErrors.length} errors`);
   }
 }
-
-run().catch(e => core.setFailed(e.message));
