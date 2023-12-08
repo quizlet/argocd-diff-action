@@ -123,6 +123,11 @@ interface Diff {
   error?: ExecResult;
 }
 async function postDiffComment(diffs: Diff[]): Promise<void> {
+  let protocol = 'https';
+  if (PLAINTEXT) {
+    protocol = 'http';
+  }
+
   const { owner, repo } = github.context.repo;
   const sha = github.context.payload.pull_request?.head?.sha;
 
@@ -130,8 +135,8 @@ async function postDiffComment(diffs: Diff[]): Promise<void> {
   const shortCommitSha = String(sha).substr(0, 7);
 
   const diffOutput = diffs.map(
-    ({ app, diff, error }) => `   
-App: [\`${app.metadata.name}\`](https://${ARGOCD_SERVER_URL}/applications/${app.metadata.name}) 
+    ({ app, diff, error }) => `
+App: [\`${app.metadata.name}\`](${protocol}://${ARGOCD_SERVER_URL}/applications/${app.metadata.name})
 YAML generation: ${error ? ' Error 🛑' : 'Success 🟢'}
 App sync status: ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️ '}
 ${
