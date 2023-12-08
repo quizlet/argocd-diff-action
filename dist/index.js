@@ -1763,13 +1763,14 @@ function getApps() {
             core.error(e);
         }
         return responseJson.items.filter(app => {
-            const targetPrimary = app.spec.source.targetRevision === 'master' || app.spec.source.targetRevision === 'main';
+            const targetRevision = app.spec.source.targetRevision;
+            const targetPrimary = targetRevision === 'master' || targetRevision === 'main' || !targetRevision;
             return (app.spec.source.repoURL.includes(`${github.context.repo.owner}/${github.context.repo.repo}`) && targetPrimary);
         });
     });
 }
 function postDiffComment(diffs) {
-    var _a, _b;
+    var _a, _b, _c;
     return __awaiter(this, void 0, void 0, function* () {
         let protocol = 'https';
         if (PLAINTEXT) {
@@ -1779,6 +1780,7 @@ function postDiffComment(diffs) {
         const sha = (_b = (_a = github.context.payload.pull_request) === null || _a === void 0 ? void 0 : _a.head) === null || _b === void 0 ? void 0 : _b.sha;
         const commitLink = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`;
         const shortCommitSha = String(sha).substr(0, 7);
+        const prefixHeader = `## ArgoCD Diff on ${ENV}`;
         const diffOutput = diffs.map(({ app, diff, error }) => `
 App: [\`${app.metadata.name}\`](${protocol}://${ARGOCD_SERVER_URL}/applications/${app.metadata.name})
 YAML generation: ${error ? ' Error 🛑' : 'Success 🟢'}
@@ -1811,7 +1813,7 @@ ${diff}
 ---
 `);
         const output = scrubSecrets(`
-## ArgoCD Diff on ${ENV} for commit [\`${shortCommitSha}\`](${commitLink})
+${prefixHeader} for commit [\`${shortCommitSha}\`](${commitLink})
 _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })} PT_
   ${diffOutput.join('\n')}
 
@@ -1821,6 +1823,22 @@ _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angele
 | ⚠️      | The app is out-of-sync in ArgoCD, and the diffs you see include those changes plus any from this PR. |
 | 🛑     | There was an error generating the ArgoCD diffs due to changes in this PR. |
 `);
+        const commentsResponse = yield octokit.rest.issues.listComments({
+            issue_number: github.context.issue.number,
+            owner,
+            repo
+        });
+        // Delete stale comments
+        for (const comment of commentsResponse.data) {
+            if ((_c = comment.body) === null || _c === void 0 ? void 0 : _c.includes(prefixHeader)) {
+                core.info(`deleting comment ${comment.id}`);
+                octokit.rest.issues.deleteComment({
+                    owner,
+                    repo,
+                    comment_id: comment.id,
+                });
+            }
+        }
         // Only post a new comment when there are changes
         if (diffs.length) {
             octokit.rest.issues.createComment({
@@ -1877,7 +1895,6 @@ function run() {
         }
     });
 }
-run().catch(e => core.setFailed(e.message));
 
 
 /***/ }),
