@@ -260,3 +260,5 @@ async function run(): Promise<void> {
     core.setFailed(`ArgoCD diff failed: Encountered ${diffsWithErrors.length} errors`);
   }
 }
+
+run().catch(e => core.setFailed(e.message));
