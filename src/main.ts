@@ -37,7 +37,7 @@ const ARGOCD_SERVER_URL = core.getInput('argocd-server-url');
 const ARGOCD_TOKEN = core.getInput('argocd-token');
 const VERSION = core.getInput('argocd-version');
 const ENV = core.getInput('environment');
-const PLAINTEXT = core.getInput('plaintext').toLowerCase() === "true";
+const PLAINTEXT = core.getInput('plaintext').toLowerCase() === 'true';
 let EXTRA_CLI_ARGS = core.getInput('argocd-extra-cli-args');
 if (PLAINTEXT) {
   EXTRA_CLI_ARGS += ' --plaintext';
@@ -104,12 +104,13 @@ async function getApps(): Promise<App[]> {
     });
     responseJson = await response.json();
   } catch (e) {
-    core.error(e);
+    core.error(`${e}`);
   }
 
   return (responseJson.items as App[]).filter(app => {
-    const targetRevision = app.spec.source.targetRevision
-    const targetPrimary = targetRevision === 'master' || targetRevision === 'main' || !targetRevision
+    const targetRevision = app.spec.source.targetRevision;
+    const targetPrimary =
+      targetRevision === 'master' || targetRevision === 'main' || !targetRevision;
     return (
       app.spec.source.repoURL.includes(
         `${github.context.repo.owner}/${github.context.repo.repo}`
@@ -135,15 +136,17 @@ async function postDiffComment(diffs: Diff[]): Promise<void> {
   const commitLink = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`;
   const shortCommitSha = String(sha).substr(0, 7);
 
-  const prefixHeader = `## ArgoCD Diff on ${ENV}`
+  const prefixHeader = `## ArgoCD Diff on ${ENV}`;
   const diffOutput = diffs.map(
     ({ app, diff, error }) => `
-App: [\`${app.metadata.name}\`](${protocol}://${ARGOCD_SERVER_URL}/applications/${app.metadata.name})
+App: [\`${app.metadata.name}\`](${protocol}://${ARGOCD_SERVER_URL}/applications/${
+      app.metadata.name
+    })
 YAML generation: ${error ? ' Error 🛑' : 'Success 🟢'}
 App sync status: ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️ '}
 ${
-      error
-        ? `
+  error
+    ? `
 **\`stderr:\`**
 \`\`\`
 ${error.stderr}
@@ -154,12 +157,12 @@ ${error.stderr}
 ${JSON.stringify(error.err)}
 \`\`\`
 `
-        : ''
-      }
+    : ''
+}
 
 ${
-      diff
-        ? `
+  diff
+    ? `
 <details>
 
 \`\`\`diff
@@ -168,8 +171,8 @@ ${diff}
 
 </details>
 `
-        : ''
-      }
+    : ''
+}
 ---
 `
   );
@@ -195,11 +198,11 @@ _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angele
   // Delete stale comments
   for (const comment of commentsResponse.data) {
     if (comment.body?.includes(prefixHeader)) {
-      core.info(`deleting comment ${comment.id}`)
+      core.info(`deleting comment ${comment.id}`);
       octokit.rest.issues.deleteComment({
         owner,
         repo,
-        comment_id: comment.id,
+        comment_id: comment.id
       });
     }
   }
@@ -249,7 +252,7 @@ async function run(): Promise<void> {
         diffs.push({
           app,
           diff: '',
-          error: e
+          error: res
         });
       }
     }
