@@ -28,6 +28,18 @@ inputs:
     description: Name of env to use in the diff title posted to the PR
     default: legacy
     required: false
+  revision:
+    description: The revision to compare against
+    default: ""
+    required: false
+  server-side-generate:
+    description: Whether to generate the diff server-side
+    default: 'false'
+    required: false
+  insecure:
+    description: Whether to use insecure HTTPS
+    default: 'false'
+    required: false
 runs:
   using: 'node12'
   main: 'dist/index.js'
