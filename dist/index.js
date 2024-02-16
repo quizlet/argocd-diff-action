@@ -1691,6 +1691,7 @@ const github = __importStar(__webpack_require__(469));
 const fs = __importStar(__webpack_require__(747));
 const path = __importStar(__webpack_require__(622));
 const node_fetch_1 = __importDefault(__webpack_require__(454));
+const https_1 = __importDefault(__webpack_require__(211));
 const ARCH = process.env.ARCH || 'linux';
 const githubToken = core.getInput('github-token');
 core.info(githubToken);
@@ -1698,7 +1699,10 @@ const ARGOCD_SERVER_URL = core.getInput('argocd-server-url');
 const ARGOCD_TOKEN = core.getInput('argocd-token');
 const VERSION = core.getInput('argocd-version');
 const ENV = core.getInput('environment');
-const PLAINTEXT = core.getInput('plaintext').toLowerCase() === "true";
+const PLAINTEXT = core.getInput('plaintext').toLowerCase() === 'true';
+const REVISION = core.getInput('revision');
+const SERVER_SIDE_GENERATE = core.getInput('server-side-generate').toLowerCase() === 'true';
+const INSECURE = core.getInput('insecure').toLowerCase() === 'true';
 let EXTRA_CLI_ARGS = core.getInput('argocd-extra-cli-args');
 if (PLAINTEXT) {
     EXTRA_CLI_ARGS += ' --plaintext';
@@ -1753,9 +1757,13 @@ function getApps() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let responseJson;
         try {
+            const agent = new https_1.default.Agent({
+                rejectUnauthorized: !INSECURE
+            });
             const response = yield node_fetch_1.default(url, {
                 method: 'GET',
-                headers: { Cookie: `argocd.token=${ARGOCD_TOKEN}` }
+                headers: { Cookie: `argocd.token=${ARGOCD_TOKEN}` },
+                agent
             });
             responseJson = yield response.json();
         }
@@ -1835,7 +1843,7 @@ _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angele
                 octokit.rest.issues.deleteComment({
                     owner,
                     repo,
-                    comment_id: comment.id,
+                    comment_id: comment.id
                 });
             }
         }
@@ -1864,7 +1872,16 @@ function run() {
         core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
         const diffs = [];
         yield asyncForEach(apps, (app) => __awaiter(this, void 0, void 0, function* () {
-            const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
+            let command = `app diff ${app.metadata.name}`;
+            if (REVISION) {
+                command += ` --revision=${REVISION}`;
+            }
+            else {
+                command += ` --local=${app.spec.source.path}`;
+            }
+            if (SERVER_SIDE_GENERATE) {
+                command += ' --server-side-generate';
+            }
             try {
                 core.info(`Running: argocd ${command}`);
                 // ArgoCD app diff will exit 1 if there is a diff, so always catch,
