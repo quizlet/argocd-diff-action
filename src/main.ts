@@ -1,150 +1,158 @@
-import * as core from '@actions/core';
-import * as tc from '@actions/tool-cache';
-import { exec, ExecException, ExecOptions } from 'child_process';
-import * as github from '@actions/github';
-import * as fs from 'fs';
-import * as path from 'path';
-import nodeFetch from 'node-fetch';
-import https from 'https';
+import * as core from '@actions/core'
+import * as tc from '@actions/tool-cache'
+import { exec, ExecException, ExecOptions } from 'child_process'
+import * as github from '@actions/github'
+import * as fs from 'fs'
+import * as path from 'path'
+import axios from 'axios'
+import https from 'https'
 
 interface ExecResult {
-  err?: Error | undefined;
-  stdout: string;
-  stderr: string;
+  err?: Error | undefined
+  stdout: string
+  stderr: string
 }
 
 interface App {
-  metadata: { name: string };
+  metadata: { name: string }
   spec: {
     source: {
-      repoURL: string;
-      path: string;
-      targetRevision: string;
-      kustomize: Object;
-      helm: Object;
-    };
-  };
+      repoURL: string
+      path: string
+      targetRevision: string
+      kustomize: Record<string, unknown>
+      helm: Record<string, unknown>
+    }
+  }
   status: {
     sync: {
-      status: 'OutOfSync' | 'Synced';
-    };
-  };
+      status: 'OutOfSync' | 'Synced'
+    }
+  }
 }
-const ARCH = process.env.ARCH || 'linux';
-const githubToken = core.getInput('github-token');
-core.info(githubToken);
+const ARCH = process.env.ARCH || 'linux'
+const githubToken = core.getInput('github-token')
+core.info(githubToken)
 
-const ARGOCD_SERVER_URL = core.getInput('argocd-server-url');
-const ARGOCD_TOKEN = core.getInput('argocd-token');
-const VERSION = core.getInput('argocd-version');
-const ENV = core.getInput('environment');
-const PLAINTEXT = core.getInput('plaintext').toLowerCase() === 'true';
-const REVISION = core.getInput('revision');
-const SERVER_SIDE_GENERATE = core.getInput('server-side-generate').toLowerCase() === 'true';
-const INSECURE = core.getInput('insecure').toLowerCase() === 'true';
-let EXTRA_CLI_ARGS = core.getInput('argocd-extra-cli-args');
+const ARGOCD_SERVER_URL = core.getInput('argocd-server-url')
+const ARGOCD_TOKEN = core.getInput('argocd-token')
+const VERSION = core.getInput('argocd-version')
+const ENV = core.getInput('environment')
+const PLAINTEXT = core.getInput('plaintext').toLowerCase() === 'true'
+const REVISION = core.getInput('revision')
+const SERVER_SIDE_GENERATE =
+  core.getInput('server-side-generate').toLowerCase() === 'true'
+const INSECURE = core.getInput('insecure').toLowerCase() === 'true'
+let EXTRA_CLI_ARGS = core.getInput('argocd-extra-cli-args')
 if (PLAINTEXT) {
-  EXTRA_CLI_ARGS += ' --plaintext';
+  EXTRA_CLI_ARGS += ' --plaintext'
 }
 
-const octokit = github.getOctokit(githubToken);
+const octokit = github.getOctokit(githubToken)
 
-async function execCommand(command: string, options: ExecOptions = {}): Promise<ExecResult> {
-  const p = new Promise<ExecResult>(async (done, failed) => {
-    exec(command, options, (err: ExecException | null, stdout: string, stderr: string): void => {
-      const res: ExecResult = {
-        stdout,
-        stderr
-      };
-      if (err) {
-        res.err = err;
-        failed(res);
-        return;
+async function execCommand(
+  command: string,
+  options: ExecOptions = {}
+): Promise<ExecResult> {
+  const p = new Promise<ExecResult>((done, failed) => {
+    exec(
+      command,
+      options,
+      (err: ExecException | null, stdout: string, stderr: string): void => {
+        const res: ExecResult = {
+          stdout,
+          stderr
+        }
+        if (err) {
+          res.err = err
+          failed(res)
+          return
+        }
+        done(res)
       }
-      done(res);
-    });
-  });
-  return await p;
+    )
+  })
+  return await p
 }
 
 function scrubSecrets(input: string): string {
-  let output = input;
-  const authTokenMatches = input.match(/--auth-token=([\w.\S]+)/);
+  let output = input
+  const authTokenMatches = input.match(/--auth-token=([\w.\S]+)/)
   if (authTokenMatches) {
-    output = output.replace(new RegExp(authTokenMatches[1], 'g'), '***');
+    output = output.replace(new RegExp(authTokenMatches[1], 'g'), '***')
   }
-  return output;
+  return output
 }
 
-async function setupArgoCDCommand(): Promise<(params: string) => Promise<ExecResult>> {
-  const argoBinaryPath = 'bin/argo';
+async function setupArgoCDCommand(): Promise<
+  (params: string) => Promise<ExecResult>
+> {
+  const argoBinaryPath = 'bin/argo'
   await tc.downloadTool(
     `https://github.com/argoproj/argo-cd/releases/download/${VERSION}/argocd-${ARCH}-amd64`,
     argoBinaryPath
-  );
-  fs.chmodSync(path.join(argoBinaryPath), '755');
+  )
+  fs.chmodSync(path.join(argoBinaryPath), '755')
 
   // core.addPath(argoBinaryPath);
 
   return async (params: string) =>
     execCommand(
       `${argoBinaryPath} ${params} --auth-token=${ARGOCD_TOKEN} --server=${ARGOCD_SERVER_URL} ${EXTRA_CLI_ARGS}`
-    );
+    )
 }
 
 async function getApps(): Promise<App[]> {
-  let protocol = 'https';
+  let protocol = 'https'
   if (PLAINTEXT) {
-    protocol = 'http';
+    protocol = 'http'
   }
-  const url = `${protocol}://${ARGOCD_SERVER_URL}/api/v1/applications`;
-  core.info(`Fetching apps from: ${url}`);
+  const url = `${protocol}://${ARGOCD_SERVER_URL}/api/v1/applications`
+  core.info(`Fetching apps from: ${url}`)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let responseJson: any;
+  let responseJson: any
   try {
-    const agent = new https.Agent({
-      rejectUnauthorized: !INSECURE
-    });
-    const response = await nodeFetch(url, {
-      method: 'GET',
+    const response = await axios.get(url, {
       headers: { Cookie: `argocd.token=${ARGOCD_TOKEN}` },
-      agent
-    });
-    responseJson = await response.json();
+      httpsAgent: new https.Agent({ rejectUnauthorized: !INSECURE })
+    })
+    responseJson = await response.data()
   } catch (e) {
-    core.error(e);
+    core.error(e as Error)
   }
 
   return (responseJson.items as App[]).filter(app => {
-    const targetRevision = app.spec.source.targetRevision;
+    const targetRevision = app.spec.source.targetRevision
     const targetPrimary =
-      targetRevision === 'master' || targetRevision === 'main' || !targetRevision;
+      targetRevision === 'master' ||
+      targetRevision === 'main' ||
+      !targetRevision
     return (
       app.spec.source.repoURL.includes(
         `${github.context.repo.owner}/${github.context.repo.repo}`
       ) && targetPrimary
-    );
-  });
+    )
+  })
 }
 
 interface Diff {
-  app: App;
-  diff: string;
-  error?: ExecResult;
+  app: App
+  diff: string
+  error?: ExecResult
 }
 async function postDiffComment(diffs: Diff[]): Promise<void> {
-  let protocol = 'https';
+  let protocol = 'https'
   if (PLAINTEXT) {
-    protocol = 'http';
+    protocol = 'http'
   }
 
-  const { owner, repo } = github.context.repo;
-  const sha = github.context.payload.pull_request?.head?.sha;
+  const { owner, repo } = github.context.repo
+  const sha = github.context.payload.pull_request?.head?.sha
 
-  const commitLink = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`;
-  const shortCommitSha = String(sha).substr(0, 7);
+  const commitLink = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`
+  const shortCommitSha = String(sha).substring(0, 7)
 
-  const prefixHeader = `## ArgoCD Diff on ${ENV}`;
+  const prefixHeader = `## ArgoCD Diff on ${ENV}`
   const diffOutput = diffs.map(
     ({ app, diff, error }) => `
 App: [\`${app.metadata.name}\`](${protocol}://${ARGOCD_SERVER_URL}/applications/${
@@ -183,7 +191,7 @@ ${diff}
 }
 ---
 `
-  );
+  )
 
   const output = scrubSecrets(`
 ${prefixHeader} for commit [\`${shortCommitSha}\`](${commitLink})
@@ -195,23 +203,23 @@ _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angele
 | ✅     | The app is synced in ArgoCD, and diffs you see are solely from this PR. |
 | ⚠️      | The app is out-of-sync in ArgoCD, and the diffs you see include those changes plus any from this PR. |
 | 🛑     | There was an error generating the ArgoCD diffs due to changes in this PR. |
-`);
+`)
 
   const commentsResponse = await octokit.rest.issues.listComments({
     issue_number: github.context.issue.number,
     owner,
     repo
-  });
+  })
 
   // Delete stale comments
   for (const comment of commentsResponse.data) {
     if (comment.body?.includes(prefixHeader)) {
-      core.info(`deleting comment ${comment.id}`);
+      core.info(`deleting comment ${comment.id}`)
       octokit.rest.issues.deleteComment({
         owner,
         repo,
         comment_id: comment.id
-      });
+      })
     }
   }
 
@@ -222,7 +230,7 @@ _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angele
       owner,
       repo,
       body: output
-    });
+    })
   }
 }
 
@@ -231,53 +239,61 @@ async function asyncForEach<T>(
   callback: (item: T, i: number, arr: T[]) => Promise<void>
 ): Promise<void> {
   for (let index = 0; index < array.length; index++) {
-    await callback(array[index], index, array);
+    await callback(array[index], index, array)
   }
 }
 
 async function run(): Promise<void> {
-  const argocd = await setupArgoCDCommand();
-  const apps = await getApps();
-  core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
+  const argocd = await setupArgoCDCommand()
+  const apps = await getApps()
+  core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`)
 
-  const diffs: Diff[] = [];
+  const diffs: Diff[] = []
 
   await asyncForEach(apps, async app => {
-    let command = `app diff ${app.metadata.name}`;
+    let command = `app diff ${app.metadata.name}`
     if (REVISION) {
-      command += ` --revision=${REVISION}`;
+      command += ` --revision=${REVISION}`
     } else {
-      command += ` --local=${app.spec.source.path}`;
+      command += ` --local=${app.spec.source.path}`
     }
     if (SERVER_SIDE_GENERATE) {
-      command += ' --server-side-generate';
+      command += ' --server-side-generate'
     }
     try {
-      core.info(`Running: argocd ${command}`);
+      core.info(`Running: argocd ${command}`)
       // ArgoCD app diff will exit 1 if there is a diff, so always catch,
       // and then consider it a success if there's a diff in stdout
       // https://github.com/argoproj/argo-cd/issues/3588
-      await argocd(command);
+      await argocd(command)
     } catch (e) {
-      const res = e as ExecResult;
-      core.info(`stdout: ${res.stdout}`);
-      core.info(`stderr: ${res.stderr}`);
+      const res = e as ExecResult
+      core.info(`stdout: ${res.stdout}`)
+      core.info(`stderr: ${res.stderr}`)
       if (res.stdout) {
-        diffs.push({ app, diff: res.stdout });
+        diffs.push({ app, diff: res.stdout })
       } else {
         diffs.push({
           app,
           diff: '',
-          error: e
-        });
+          error: e as ExecResult
+        })
       }
     }
-  });
-  await postDiffComment(diffs);
-  const diffsWithErrors = diffs.filter(d => d.error);
+  })
+  await postDiffComment(diffs)
+  const diffsWithErrors = diffs.filter(d => d.error)
   if (diffsWithErrors.length) {
-    core.setFailed(`ArgoCD diff failed: Encountered ${diffsWithErrors.length} errors`);
+    core.setFailed(
+      `ArgoCD diff failed: Encountered ${diffsWithErrors.length} errors`
+    )
   }
 }
 
-run().catch(e => core.setFailed(e.message));
+await (async () => {
+  try {
+    await run()
+  } catch (e) {
+    core.setFailed((e as Error).message)
+  }
+})()
