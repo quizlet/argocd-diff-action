@@ -1698,7 +1698,7 @@ const ARGOCD_SERVER_URL = core.getInput('argocd-server-url');
 const ARGOCD_TOKEN = core.getInput('argocd-token');
 const VERSION = core.getInput('argocd-version');
 const ENV = core.getInput('environment');
-const PLAINTEXT = core.getInput('plaintext').toLowerCase() === "true";
+const PLAINTEXT = core.getInput('plaintext').toLowerCase() === 'true';
 let EXTRA_CLI_ARGS = core.getInput('argocd-extra-cli-args');
 if (PLAINTEXT) {
     EXTRA_CLI_ARGS += ' --plaintext';
@@ -1835,7 +1835,7 @@ _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angele
                 octokit.rest.issues.deleteComment({
                     owner,
                     repo,
-                    comment_id: comment.id,
+                    comment_id: comment.id
                 });
             }
         }
@@ -1864,7 +1864,7 @@ function run() {
         core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
         const diffs = [];
         yield asyncForEach(apps, (app) => __awaiter(this, void 0, void 0, function* () {
-            const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
+            const command = `app diff ${app.metadata.name} --server-side-generate --revision ${github.context.sha}`;
             try {
                 core.info(`Running: argocd ${command}`);
                 // ArgoCD app diff will exit 1 if there is a diff, so always catch,
