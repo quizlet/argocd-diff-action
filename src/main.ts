@@ -135,8 +135,14 @@ async function postDiffComment(diffs: Diff[]): Promise<void> {
   const commitLink = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`;
   const shortCommitSha = String(sha).substr(0, 7);
 
+  // const filteredDiffs = diffs
+  const filteredDiffs = diffs.map(diff => {
+    diff.diff = filterDiff(diff.diff);
+    return diff;
+  }).filter(d => d.diff !== '');
+
   const prefixHeader = `## ArgoCD Diff on ${ENV}`
-  const diffOutput = diffs.map(
+  const diffOutput = filteredDiffs.map(
     ({ app, diff, error }) => `
 App: [\`${app.metadata.name}\`](${protocol}://${ARGOCD_SERVER_URL}/applications/${app.metadata.name})
 YAML generation: ${error ? ' Error 🛑' : 'Success 🟢'}
@@ -205,7 +211,7 @@ _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angele
   }
 
   // Only post a new comment when there are changes
-  if (diffs.length) {
+  if (filteredDiffs.length) {
     octokit.rest.issues.createComment({
       issue_number: github.context.issue.number,
       owner,
@@ -259,6 +265,25 @@ async function run(): Promise<void> {
   if (diffsWithErrors.length) {
     core.setFailed(`ArgoCD diff failed: Encountered ${diffsWithErrors.length} errors`);
   }
+}
+
+function filterDiff(diffText: string) {
+  // Split the diff text into sections based on the headers
+  const sections = diffText.split(/(?=^===== )/m);
+
+  const filteredSection = sections.map(section => {
+    var removedLabels = section.replace(/<\s+argocd\.argoproj\.io\/instance:.*\n---\n>\s+argocd\.argoproj\.io\/instance:.*\n?/g, '').trim();
+    var removedLabels = removedLabels.replace(/<\s+app.kubernetes.io\/part-of:.*\n?/g, '').trim();
+    return removedLabels;
+  }).filter(section => section.trim() !== '');
+
+  const removeEmptyHeaders = filteredSection.filter(entry => {
+    // Remove empty strings and sections that are just headers with line numbers
+    return !entry.match(/^===== .*\/.* ======\n\d+(,\d+)?c\d+(,\d+)?$/);
+  });
+
+  // Join the filtered sections back together
+  return removeEmptyHeaders.join('\n').trim();
 }
 
 run().catch(e => core.setFailed(e.message));
