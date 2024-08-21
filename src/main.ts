@@ -253,18 +253,11 @@ function partOfApp(changedFiles: string[], app: App): boolean {
 }
 
 function getFirstTwoDirectories(filePath: string): string {
-  // Normalize the path to handle any inconsistencies
   const normalizedPath = path.normalize(filePath);
-
-  // Split the path into parts based on the OS-specific separator
   const parts = normalizedPath.split(path.sep).filter(Boolean); // filter(Boolean) removes empty strings
-
-  // Check if the path has at least two segments
   if (parts.length < 2) {
     return parts.join(path.sep); // Return the entire path if less than two directories
   }
-
-  // Join the first two segments
   return parts.slice(0, 2).join(path.sep);
 }
 
