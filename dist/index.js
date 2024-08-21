@@ -1762,11 +1762,18 @@ function getApps() {
         catch (e) {
             core.error(e);
         }
-        return responseJson.items.filter(app => {
+        const apps = responseJson.items;
+        const repoApps = apps.filter(app => {
             const targetRevision = app.spec.source.targetRevision;
             const targetPrimary = targetRevision === 'master' || targetRevision === 'main' || !targetRevision;
             return (app.spec.source.repoURL.includes(`${github.context.repo.owner}/${github.context.repo.repo}`) && targetPrimary);
         });
+        const changedFiles = yield getChangedFiles();
+        console.log(`Changed files: ${changedFiles.join(', ')}`);
+        const appsAffected = repoApps.filter(app => {
+            return partOfApp(changedFiles, app);
+        });
+        return appsAffected;
     });
 }
 function postDiffComment(diffs) {
@@ -1854,6 +1861,39 @@ _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angele
             });
         }
     });
+}
+function getChangedFiles() {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { owner, repo } = github.context.repo;
+        const pull_number = github.context.issue.number;
+        const listFilesResponse = yield octokit.rest.pulls.listFiles({
+            owner,
+            repo,
+            pull_number
+        });
+        const changedFiles = listFilesResponse.data.map(file => file.filename);
+        return changedFiles;
+    });
+}
+function partOfApp(changedFiles, app) {
+    const sourcePath = path.normalize(app.spec.source.path);
+    const appPath = getFirstTwoDirectories(sourcePath);
+    return changedFiles.some(file => {
+        const normalizedFilePath = path.normalize(file);
+        return normalizedFilePath.startsWith(appPath);
+    });
+}
+function getFirstTwoDirectories(filePath) {
+    // Normalize the path to handle any inconsistencies
+    const normalizedPath = path.normalize(filePath);
+    // Split the path into parts based on the OS-specific separator
+    const parts = normalizedPath.split(path.sep).filter(Boolean); // filter(Boolean) removes empty strings
+    // Check if the path has at least two segments
+    if (parts.length < 2) {
+        return parts.join(path.sep); // Return the entire path if less than two directories
+    }
+    // Join the first two segments
+    return parts.slice(0, 2).join(path.sep);
 }
 function asyncForEach(array, callback) {
     return __awaiter(this, void 0, void 0, function* () {

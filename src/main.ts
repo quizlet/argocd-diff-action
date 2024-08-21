@@ -106,8 +106,8 @@ async function getApps(): Promise<App[]> {
   } catch (e) {
     core.error(e);
   }
-
-  return (responseJson.items as App[]).filter(app => {
+  const apps = responseJson.items as App[]
+  const repoApps = apps.filter(app => {
     const targetRevision = app.spec.source.targetRevision
     const targetPrimary = targetRevision === 'master' || targetRevision === 'main' || !targetRevision
     return (
@@ -116,6 +116,13 @@ async function getApps(): Promise<App[]> {
       ) && targetPrimary
     );
   });
+
+  const changedFiles = await getChangedFiles();
+  console.log(`Changed files: ${changedFiles.join(', ')}`);
+  const appsAffected = repoApps.filter(app => {
+    return partOfApp(changedFiles, app)
+  });
+  return appsAffected;
 }
 
 interface Diff {
@@ -219,6 +226,39 @@ _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angele
       body: output
     });
   }
+}
+
+async function getChangedFiles(): Promise<string[]> {
+  const { owner, repo } = github.context.repo;
+  const pull_number = github.context.issue.number;
+
+  const listFilesResponse = await octokit.rest.pulls.listFiles({
+    owner,
+    repo,
+    pull_number
+  });
+
+  const changedFiles = listFilesResponse.data.map(file => file.filename);
+  return changedFiles;
+}
+
+function partOfApp(changedFiles: string[], app: App): boolean {
+  const sourcePath = path.normalize(app.spec.source.path);
+  const appPath = getFirstTwoDirectories(sourcePath);
+
+  return changedFiles.some(file => {
+    const normalizedFilePath = path.normalize(file);
+    return normalizedFilePath.startsWith(appPath);
+  });
+}
+
+function getFirstTwoDirectories(filePath: string): string {
+  const normalizedPath = path.normalize(filePath);
+  const parts = normalizedPath.split(path.sep).filter(Boolean); // filter(Boolean) removes empty strings
+  if (parts.length < 2) {
+    return parts.join(path.sep); // Return the entire path if less than two directories
+  }
+  return parts.slice(0, 2).join(path.sep);
 }
 
 async function asyncForEach<T>(
