@@ -173,13 +173,11 @@ ${JSON.stringify(error.err)}
 ${
       diff
         ? `
-<details>
 
 \`\`\`diff
 ${diff}
 \`\`\`
 
-</details>
 `
         : ''
       }
