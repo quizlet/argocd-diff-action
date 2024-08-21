@@ -1884,15 +1884,11 @@ function partOfApp(changedFiles, app) {
     });
 }
 function getFirstTwoDirectories(filePath) {
-    // Normalize the path to handle any inconsistencies
     const normalizedPath = path.normalize(filePath);
-    // Split the path into parts based on the OS-specific separator
     const parts = normalizedPath.split(path.sep).filter(Boolean); // filter(Boolean) removes empty strings
-    // Check if the path has at least two segments
     if (parts.length < 2) {
         return parts.join(path.sep); // Return the entire path if less than two directories
     }
-    // Join the first two segments
     return parts.slice(0, 2).join(path.sep);
 }
 function asyncForEach(array, callback) {
@@ -1944,8 +1940,8 @@ function filterDiff(diffText) {
     // Split the diff text into sections based on the headers
     const sections = diffText.split(/(?=^===== )/m);
     const filteredSection = sections.map(section => {
-        var removedLabels = section.replace(/<\s+argocd\.argoproj\.io\/instance:.*\n---\n>\s+argocd\.argoproj\.io\/instance:.*\n?/g, '').trim();
-        var removedLabels = removedLabels.replace(/<\s+app.kubernetes.io\/part-of:.*\n?/g, '').trim();
+        var removedLabels = section.replace(/(\d+(,\d+)?c\d+(,\d+)?\n)?<\s+argocd\.argoproj\.io\/instance:.*\n---\n>\s+argocd\.argoproj\.io\/instance:.*\n?/g, '').trim();
+        removedLabels = removedLabels.replace(/(\d+(,\d+)?c\d+(,\d+)?\n)?<\s+app.kubernetes.io\/part-of:.*\n?/g, '').trim();
         return removedLabels;
     }).filter(section => section.trim() !== '');
     const removeEmptyHeaders = filteredSection.filter(entry => {

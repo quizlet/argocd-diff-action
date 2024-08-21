@@ -312,8 +312,8 @@ function filterDiff(diffText: string) {
   const sections = diffText.split(/(?=^===== )/m);
 
   const filteredSection = sections.map(section => {
-    var removedLabels = section.replace(/<\s+argocd\.argoproj\.io\/instance:.*\n---\n>\s+argocd\.argoproj\.io\/instance:.*\n?/g, '').trim();
-    var removedLabels = removedLabels.replace(/<\s+app.kubernetes.io\/part-of:.*\n?/g, '').trim();
+    var removedLabels = section.replace(/(\d+(,\d+)?c\d+(,\d+)?\n)?<\s+argocd\.argoproj\.io\/instance:.*\n---\n>\s+argocd\.argoproj\.io\/instance:.*\n?/g, '').trim();
+    removedLabels = removedLabels.replace(/(\d+(,\d+)?c\d+(,\d+)?\n)?<\s+app.kubernetes.io\/part-of:.*\n?/g, '').trim();
     return removedLabels;
   }).filter(section => section.trim() !== '');
 
