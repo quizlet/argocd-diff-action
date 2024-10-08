@@ -21,7 +21,7 @@ jobs:
     steps:
 
       - name: Checkout repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - uses: quizlet/argocd-diff-action@master
         name: ArgoCD Diff
