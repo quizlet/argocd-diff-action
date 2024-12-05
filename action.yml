@@ -28,8 +28,6 @@ inputs:
     description: Name of env to use in the diff title posted to the PR
     default: legacy
     required: false
-  apps-filter:
-    description: ""
 runs:
   using: 'node20'
   main: 'dist/index.js'
