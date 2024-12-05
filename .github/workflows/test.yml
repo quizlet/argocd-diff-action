@@ -20,3 +20,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: ./
+      with:
+        argocd-token: foobar-bazqux
+        github-token: ${{ github.token }}
