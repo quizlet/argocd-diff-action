@@ -2,12 +2,12 @@ import * as core from '@actions/core';
 import * as tc from '@actions/tool-cache';
 import { exec, ExecException, ExecOptions } from 'child_process';
 import * as github from '@actions/github';
-import * as fs from 'fs';
-import * as path from 'path';
+import fs from 'fs';
+import path from 'path';
 import nodeFetch from 'node-fetch';
 
 interface ExecResult {
-  err?: Error | undefined;
+  err?: Error;
   stdout: string;
   stderr: string;
 }
@@ -19,8 +19,8 @@ interface App {
       repoURL: string;
       path: string;
       targetRevision: string;
-      kustomize: Object;
-      helm: Object;
+      kustomize: object;
+      helm: object;
     };
   };
   status: {
@@ -37,7 +37,7 @@ const ARGOCD_SERVER_URL = core.getInput('argocd-server-url');
 const ARGOCD_TOKEN = core.getInput('argocd-token');
 const VERSION = core.getInput('argocd-version');
 const ENV = core.getInput('environment');
-const PLAINTEXT = core.getInput('plaintext').toLowerCase() === "true";
+const PLAINTEXT = core.getInput('plaintext').toLowerCase() === 'true';
 let EXTRA_CLI_ARGS = core.getInput('argocd-extra-cli-args');
 if (PLAINTEXT) {
   EXTRA_CLI_ARGS += ' --plaintext';
@@ -45,8 +45,8 @@ if (PLAINTEXT) {
 
 const octokit = github.getOctokit(githubToken);
 
-async function execCommand(command: string, options: ExecOptions = {}): Promise<ExecResult> {
-  const p = new Promise<ExecResult>(async (done, failed) => {
+function execCommand(command: string, options: ExecOptions = {}): Promise<ExecResult> {
+  return new Promise<ExecResult>((done, failed) => {
     exec(command, options, (err: ExecException | null, stdout: string, stderr: string): void => {
       const res: ExecResult = {
         stdout,
@@ -60,7 +60,6 @@ async function execCommand(command: string, options: ExecOptions = {}): Promise<
       done(res);
     });
   });
-  return await p;
 }
 
 function scrubSecrets(input: string): string {
@@ -73,14 +72,10 @@ function scrubSecrets(input: string): string {
 }
 
 async function setupArgoCDCommand(): Promise<(params: string) => Promise<ExecResult>> {
-  const argoBinaryPath = 'bin/argo';
-  await tc.downloadTool(
-    `https://github.com/argoproj/argo-cd/releases/download/${VERSION}/argocd-${ARCH}-amd64`,
-    argoBinaryPath
+  const argoBinaryPath = await tc.downloadTool(
+    `https://github.com/argoproj/argo-cd/releases/download/${VERSION}/argocd-${ARCH}-amd64`
   );
-  fs.chmodSync(path.join(argoBinaryPath), '755');
-
-  // core.addPath(argoBinaryPath);
+  fs.chmodSync(argoBinaryPath, '755');
 
   return async (params: string) =>
     execCommand(
@@ -89,10 +84,7 @@ async function setupArgoCDCommand(): Promise<(params: string) => Promise<ExecRes
 }
 
 async function getApps(): Promise<App[]> {
-  let protocol = 'https';
-  if (PLAINTEXT) {
-    protocol = 'http';
-  }
+  const protocol = PLAINTEXT ? 'http' : 'https';
   const url = `${protocol}://${ARGOCD_SERVER_URL}/api/v1/applications`;
   core.info(`Fetching apps from: ${url}`);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -104,12 +96,15 @@ async function getApps(): Promise<App[]> {
     });
     responseJson = await response.json();
   } catch (e) {
-    core.error(e);
+    if (e instanceof Error || typeof e === 'string') {
+      core.error(e);
+    }
   }
-  const apps = responseJson.items as App[]
+  const apps = responseJson.items as App[];
   const repoApps = apps.filter(app => {
-    const targetRevision = app.spec.source.targetRevision
-    const targetPrimary = targetRevision === 'master' || targetRevision === 'main' || !targetRevision
+    const targetRevision = app.spec.source.targetRevision;
+    const targetPrimary =
+      targetRevision === 'master' || targetRevision === 'main' || !targetRevision;
     return (
       app.spec.source.repoURL.includes(
         `${github.context.repo.owner}/${github.context.repo.repo}`
@@ -118,9 +113,9 @@ async function getApps(): Promise<App[]> {
   });
 
   const changedFiles = await getChangedFiles();
-  console.log(`Changed files: ${changedFiles.join(', ')}`);
+  core.info(`Changed files: ${changedFiles.join(', ')}`);
   const appsAffected = repoApps.filter(app => {
-    return partOfApp(changedFiles, app)
+    return partOfApp(changedFiles, app);
   });
   return appsAffected;
 }
@@ -131,32 +126,31 @@ interface Diff {
   error?: ExecResult;
 }
 async function postDiffComment(diffs: Diff[]): Promise<void> {
-  let protocol = 'https';
-  if (PLAINTEXT) {
-    protocol = 'http';
-  }
-
+  const protocol = PLAINTEXT ? 'http' : 'https';
   const { owner, repo } = github.context.repo;
   const sha = github.context.payload.pull_request?.head?.sha;
 
   const commitLink = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`;
-  const shortCommitSha = String(sha).substr(0, 7);
+  const shortCommitSha = String(sha).slice(0, 7);
 
-  // const filteredDiffs = diffs
-  const filteredDiffs = diffs.map(diff => {
-    diff.diff = filterDiff(diff.diff);
-    return diff;
-  }).filter(d => d.diff !== '');
+  const filteredDiffs = diffs
+    .map(diff => {
+      diff.diff = filterDiff(diff.diff);
+      return diff;
+    })
+    .filter(d => d.diff !== '');
 
-  const prefixHeader = `## ArgoCD Diff on ${ENV}`
+  const prefixHeader = `## ArgoCD Diff on ${ENV}`;
   const diffOutput = filteredDiffs.map(
     ({ app, diff, error }) => `
-App: [\`${app.metadata.name}\`](${protocol}://${ARGOCD_SERVER_URL}/applications/${app.metadata.name})
+App: [\`${app.metadata.name}\`](${protocol}://${ARGOCD_SERVER_URL}/applications/${
+      app.metadata.name
+    })
 YAML generation: ${error ? ' Error 🛑' : 'Success 🟢'}
 App sync status: ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️ '}
 ${
-      error
-        ? `
+  error
+    ? `
 **\`stderr:\`**
 \`\`\`
 ${error.stderr}
@@ -167,20 +161,20 @@ ${error.stderr}
 ${JSON.stringify(error.err)}
 \`\`\`
 `
-        : ''
-      }
+    : ''
+}
 
 ${
-      diff
-        ? `
+  diff
+    ? `
 
 \`\`\`diff
 ${diff}
 \`\`\`
 
 `
-        : ''
-      }
+    : ''
+}
 ---
 `
   );
@@ -206,11 +200,11 @@ _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angele
   // Delete stale comments
   for (const comment of commentsResponse.data) {
     if (comment.body?.includes(prefixHeader)) {
-      core.info(`deleting comment ${comment.id}`)
+      core.info(`deleting comment ${comment.id}`);
       octokit.rest.issues.deleteComment({
         owner,
         repo,
-        comment_id: comment.id,
+        comment_id: comment.id
       });
     }
   }
@@ -293,7 +287,7 @@ async function run(): Promise<void> {
         diffs.push({
           app,
           diff: '',
-          error: e
+          error: res
         });
       }
     }
@@ -305,15 +299,22 @@ async function run(): Promise<void> {
   }
 }
 
-function filterDiff(diffText: string) {
+function filterDiff(diffText: string): string {
   // Split the diff text into sections based on the headers
   const sections = diffText.split(/(?=^===== )/m);
 
-  const filteredSection = sections.map(section => {
-    var removedLabels = section.replace(/(\d+(,\d+)?c\d+(,\d+)?\n)?<\s+argocd\.argoproj\.io\/instance:.*\n---\n>\s+argocd\.argoproj\.io\/instance:.*\n?/g, '').trim();
-    removedLabels = removedLabels.replace(/(\d+(,\d+)?c\d+(,\d+)?\n)?<\s+app.kubernetes.io\/part-of:.*\n?/g, '').trim();
-    return removedLabels;
-  }).filter(section => section.trim() !== '');
+  const filteredSection = sections
+    .map(section => {
+      return section
+        .replace(
+          /(\d+(,\d+)?c\d+(,\d+)?\n)?<\s+argocd\.argoproj\.io\/instance:.*\n---\n>\s+argocd\.argoproj\.io\/instance:.*\n?/g,
+          ''
+        )
+        .trim()
+        .replace(/(\d+(,\d+)?c\d+(,\d+)?\n)?<\s+app.kubernetes.io\/part-of:.*\n?/g, '')
+        .trim();
+    })
+    .filter(section => section.trim() !== '');
 
   const removeEmptyHeaders = filteredSection.filter(entry => {
     // Remove empty strings and sections that are just headers with line numbers
@@ -324,4 +325,5 @@ function filterDiff(diffText: string) {
   return removeEmptyHeaders.join('\n').trim();
 }
 
+// eslint-disable-next-line github/no-then
 run().catch(e => core.setFailed(e.message));
