@@ -1,4 +1,4 @@
-name: "test"
+name: "build"
 on: # rebuild any PRs and main branch changes
   pull_request:
   push:
@@ -7,11 +7,10 @@ on: # rebuild any PRs and main branch changes
       - 'releases/*'
 
 jobs:
-  test: # make sure the action works on a clean machine without building
+  build: # make sure build/ci work properly
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: ./
-      with:
-        argocd-token: foobar-bazqux
-        github-token: ${{ github.token }}
+    - run: |
+        npm install
+        npm run all

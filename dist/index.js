@@ -52,6 +52,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.filterAppsByName = filterAppsByName;
+exports.run = run;
 const core = __importStar(__nccwpck_require__(7484));
 const tc = __importStar(__nccwpck_require__(3472));
 const child_process_1 = __nccwpck_require__(5317);
@@ -59,106 +61,119 @@ const github = __importStar(__nccwpck_require__(3228));
 const fs_1 = __importDefault(__nccwpck_require__(9896));
 const path_1 = __importDefault(__nccwpck_require__(6928));
 const node_fetch_1 = __importDefault(__nccwpck_require__(6705));
-const ARCH = process.env.ARCH || 'linux';
-const githubToken = core.getInput('github-token');
-core.info(githubToken);
-const ARGOCD_SERVER_URL = core.getInput('argocd-server-url');
-const ARGOCD_TOKEN = core.getInput('argocd-token');
-const VERSION = core.getInput('argocd-version');
-const ENV = core.getInput('environment');
-const PLAINTEXT = core.getInput('plaintext').toLowerCase() === 'true';
-let EXTRA_CLI_ARGS = core.getInput('argocd-extra-cli-args');
-if (PLAINTEXT) {
-    EXTRA_CLI_ARGS += ' --plaintext';
-}
-const octokit = github.getOctokit(githubToken);
-function execCommand(command, options = {}) {
-    return new Promise((done, failed) => {
-        (0, child_process_1.exec)(command, options, (err, stdout, stderr) => {
-            const res = {
-                stdout,
-                stderr
-            };
-            if (err) {
-                res.err = err;
-                failed(res);
-                return;
-            }
-            done(res);
-        });
-    });
-}
-function scrubSecrets(input) {
-    let output = input;
-    const authTokenMatches = input.match(/--auth-token=([\w.\S]+)/);
-    if (authTokenMatches) {
-        output = output.replace(new RegExp(authTokenMatches[1], 'g'), '***');
+function filterAppsByName(appsAffected, appNameMatcher) {
+    if (appNameMatcher.startsWith('/') && appNameMatcher.endsWith('/')) {
+        const appNameFilter = new RegExp(appNameMatcher.slice(1, -1));
+        return appsAffected.filter(app => appNameFilter.test(app.metadata.name));
     }
-    return output;
+    else if (appNameMatcher !== '') {
+        const appNames = new Set(appNameMatcher.split(','));
+        return appsAffected.filter(app => appNames.has(app.metadata.name));
+    }
+    return appsAffected;
 }
-function setupArgoCDCommand() {
+function run() {
     return __awaiter(this, void 0, void 0, function* () {
-        const argoBinaryPath = yield tc.downloadTool(`https://github.com/argoproj/argo-cd/releases/download/${VERSION}/argocd-${ARCH}-amd64`);
-        fs_1.default.chmodSync(argoBinaryPath, '755');
-        return (params) => __awaiter(this, void 0, void 0, function* () {
-            return execCommand(`${argoBinaryPath} ${params} --auth-token=${ARGOCD_TOKEN} --server=${ARGOCD_SERVER_URL} ${EXTRA_CLI_ARGS}`);
-        });
-    });
-}
-function getApps() {
-    return __awaiter(this, void 0, void 0, function* () {
-        const protocol = PLAINTEXT ? 'http' : 'https';
-        const url = `${protocol}://${ARGOCD_SERVER_URL}/api/v1/applications`;
-        core.info(`Fetching apps from: ${url}`);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let responseJson;
-        try {
-            const response = yield (0, node_fetch_1.default)(url, {
-                method: 'GET',
-                headers: { Cookie: `argocd.token=${ARGOCD_TOKEN}` }
+        const ARCH = process.env.ARCH || 'linux';
+        const githubToken = core.getInput('github-token');
+        core.info(githubToken);
+        const ARGOCD_SERVER_URL = core.getInput('argocd-server-url');
+        const ARGOCD_TOKEN = core.getInput('argocd-token');
+        const VERSION = core.getInput('argocd-version');
+        const ENV = core.getInput('environment');
+        const PLAINTEXT = core.getInput('plaintext').toLowerCase() === 'true';
+        const APP_NAME_MATCHER = core.getInput('app-name-matcher');
+        let EXTRA_CLI_ARGS = core.getInput('argocd-extra-cli-args');
+        if (PLAINTEXT) {
+            EXTRA_CLI_ARGS += ' --plaintext';
+        }
+        const octokit = github.getOctokit(githubToken);
+        function execCommand(command, options = {}) {
+            return new Promise((done, failed) => {
+                (0, child_process_1.exec)(command, options, (err, stdout, stderr) => {
+                    const res = {
+                        stdout,
+                        stderr
+                    };
+                    if (err) {
+                        res.err = err;
+                        failed(res);
+                        return;
+                    }
+                    done(res);
+                });
             });
-            responseJson = yield response.json();
         }
-        catch (e) {
-            if (e instanceof Error || typeof e === 'string') {
-                core.error(e);
+        function scrubSecrets(input) {
+            let output = input;
+            const authTokenMatches = input.match(/--auth-token=([\w.\S]+)/);
+            if (authTokenMatches) {
+                output = output.replace(new RegExp(authTokenMatches[1], 'g'), '***');
             }
+            return output;
         }
-        const apps = responseJson.items;
-        const repoApps = apps.filter(app => {
-            const targetRevision = app.spec.source.targetRevision;
-            const targetPrimary = targetRevision === 'master' || targetRevision === 'main' || !targetRevision;
-            return (app.spec.source.repoURL.includes(`${github.context.repo.owner}/${github.context.repo.repo}`) && targetPrimary);
-        });
-        const changedFiles = yield getChangedFiles();
-        core.info(`Changed files: ${changedFiles.join(', ')}`);
-        const appsAffected = repoApps.filter(app => {
-            return partOfApp(changedFiles, app);
-        });
-        return appsAffected;
-    });
-}
-function postDiffComment(diffs) {
-    return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c;
-        const protocol = PLAINTEXT ? 'http' : 'https';
-        const { owner, repo } = github.context.repo;
-        const sha = (_b = (_a = github.context.payload.pull_request) === null || _a === void 0 ? void 0 : _a.head) === null || _b === void 0 ? void 0 : _b.sha;
-        const commitLink = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`;
-        const shortCommitSha = String(sha).slice(0, 7);
-        const filteredDiffs = diffs
-            .map(diff => {
-            diff.diff = filterDiff(diff.diff);
-            return diff;
-        })
-            .filter(d => d.diff !== '');
-        const prefixHeader = `## ArgoCD Diff on ${ENV}`;
-        const diffOutput = filteredDiffs.map(({ app, diff, error }) => `
+        function setupArgoCDCommand() {
+            return __awaiter(this, void 0, void 0, function* () {
+                const argoBinaryPath = yield tc.downloadTool(`https://github.com/argoproj/argo-cd/releases/download/${VERSION}/argocd-${ARCH}-amd64`);
+                fs_1.default.chmodSync(argoBinaryPath, '755');
+                return (params) => __awaiter(this, void 0, void 0, function* () {
+                    return execCommand(`${argoBinaryPath} ${params} --auth-token=${ARGOCD_TOKEN} --server=${ARGOCD_SERVER_URL} ${EXTRA_CLI_ARGS}`);
+                });
+            });
+        }
+        function getApps() {
+            return __awaiter(this, void 0, void 0, function* () {
+                const protocol = PLAINTEXT ? 'http' : 'https';
+                const url = `${protocol}://${ARGOCD_SERVER_URL}/api/v1/applications`;
+                core.info(`Fetching apps from: ${url}`);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                let responseJson;
+                try {
+                    const response = yield (0, node_fetch_1.default)(url, {
+                        method: 'GET',
+                        headers: { Cookie: `argocd.token=${ARGOCD_TOKEN}` }
+                    });
+                    responseJson = yield response.json();
+                }
+                catch (e) {
+                    if (e instanceof Error || typeof e === 'string') {
+                        core.setFailed(e);
+                    }
+                    return [];
+                }
+                const apps = responseJson.items;
+                const repoApps = apps.filter(app => {
+                    const targetRevision = app.spec.source.targetRevision;
+                    const targetPrimary = targetRevision === 'master' || targetRevision === 'main' || !targetRevision;
+                    return (app.spec.source.repoURL.includes(`${github.context.repo.owner}/${github.context.repo.repo}`) && targetPrimary);
+                });
+                const changedFiles = yield getChangedFiles();
+                core.info(`Changed files: ${changedFiles.join(', ')}`);
+                const appsAffected = repoApps.filter(partOfApp.bind(null, changedFiles));
+                return filterAppsByName(appsAffected, APP_NAME_MATCHER);
+            });
+        }
+        function postDiffComment(diffs) {
+            return __awaiter(this, void 0, void 0, function* () {
+                var _a, _b, _c;
+                const protocol = PLAINTEXT ? 'http' : 'https';
+                const { owner, repo } = github.context.repo;
+                const sha = (_b = (_a = github.context.payload.pull_request) === null || _a === void 0 ? void 0 : _a.head) === null || _b === void 0 ? void 0 : _b.sha;
+                const commitLink = `https://github.com/${owner}/${repo}/pull/${github.context.issue.number}/commits/${sha}`;
+                const shortCommitSha = String(sha).slice(0, 7);
+                const filteredDiffs = diffs
+                    .map(diff => {
+                    diff.diff = filterDiff(diff.diff);
+                    return diff;
+                })
+                    .filter(d => d.diff !== '');
+                const prefixHeader = `## ArgoCD Diff on ${ENV}`;
+                const diffOutput = filteredDiffs.map(({ app, diff, error }) => `
 App: [\`${app.metadata.name}\`](${protocol}://${ARGOCD_SERVER_URL}/applications/${app.metadata.name})
 YAML generation: ${error ? ' Error 🛑' : 'Success 🟢'}
 App sync status: ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️ '}
 ${error
-            ? `
+                    ? `
 **\`stderr:\`**
 \`\`\`
 ${error.stderr}
@@ -169,20 +184,20 @@ ${error.stderr}
 ${JSON.stringify(error.err)}
 \`\`\`
 `
-            : ''}
+                    : ''}
 
 ${diff
-            ? `
+                    ? `
 
 \`\`\`diff
 ${diff}
 \`\`\`
 
 `
-            : ''}
+                    : ''}
 ---
 `);
-        const output = scrubSecrets(`
+                const output = scrubSecrets(`
 ${prefixHeader} for commit [\`${shortCommitSha}\`](${commitLink})
 _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })} PT_
   ${diffOutput.join('\n')}
@@ -193,71 +208,68 @@ _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angele
 | ⚠️      | The app is out-of-sync in ArgoCD, and the diffs you see include those changes plus any from this PR. |
 | 🛑     | There was an error generating the ArgoCD diffs due to changes in this PR. |
 `);
-        const commentsResponse = yield octokit.rest.issues.listComments({
-            issue_number: github.context.issue.number,
-            owner,
-            repo
-        });
-        // Delete stale comments
-        for (const comment of commentsResponse.data) {
-            if ((_c = comment.body) === null || _c === void 0 ? void 0 : _c.includes(prefixHeader)) {
-                core.info(`deleting comment ${comment.id}`);
-                octokit.rest.issues.deleteComment({
+                const commentsResponse = yield octokit.rest.issues.listComments({
+                    issue_number: github.context.issue.number,
                     owner,
-                    repo,
-                    comment_id: comment.id
+                    repo
                 });
-            }
-        }
-        // Only post a new comment when there are changes
-        if (filteredDiffs.length) {
-            octokit.rest.issues.createComment({
-                issue_number: github.context.issue.number,
-                owner,
-                repo,
-                body: output
+                // Delete stale comments
+                for (const comment of commentsResponse.data) {
+                    if ((_c = comment.body) === null || _c === void 0 ? void 0 : _c.includes(prefixHeader)) {
+                        core.info(`deleting comment ${comment.id}`);
+                        octokit.rest.issues.deleteComment({
+                            owner,
+                            repo,
+                            comment_id: comment.id
+                        });
+                    }
+                }
+                // Only post a new comment when there are changes
+                if (filteredDiffs.length) {
+                    octokit.rest.issues.createComment({
+                        issue_number: github.context.issue.number,
+                        owner,
+                        repo,
+                        body: output
+                    });
+                }
             });
         }
-    });
-}
-function getChangedFiles() {
-    return __awaiter(this, void 0, void 0, function* () {
-        const { owner, repo } = github.context.repo;
-        const pull_number = github.context.issue.number;
-        const listFilesResponse = yield octokit.rest.pulls.listFiles({
-            owner,
-            repo,
-            pull_number
-        });
-        const changedFiles = listFilesResponse.data.map(file => file.filename);
-        return changedFiles;
-    });
-}
-function partOfApp(changedFiles, app) {
-    const sourcePath = path_1.default.normalize(app.spec.source.path);
-    const appPath = getFirstTwoDirectories(sourcePath);
-    return changedFiles.some(file => {
-        const normalizedFilePath = path_1.default.normalize(file);
-        return normalizedFilePath.startsWith(appPath);
-    });
-}
-function getFirstTwoDirectories(filePath) {
-    const normalizedPath = path_1.default.normalize(filePath);
-    const parts = normalizedPath.split(path_1.default.sep).filter(Boolean); // filter(Boolean) removes empty strings
-    if (parts.length < 2) {
-        return parts.join(path_1.default.sep); // Return the entire path if less than two directories
-    }
-    return parts.slice(0, 2).join(path_1.default.sep);
-}
-function asyncForEach(array, callback) {
-    return __awaiter(this, void 0, void 0, function* () {
-        for (let index = 0; index < array.length; index++) {
-            yield callback(array[index], index, array);
+        function getChangedFiles() {
+            return __awaiter(this, void 0, void 0, function* () {
+                const { owner, repo } = github.context.repo;
+                const pull_number = github.context.issue.number;
+                const listFilesResponse = yield octokit.rest.pulls.listFiles({
+                    owner,
+                    repo,
+                    pull_number
+                });
+                return listFilesResponse.data.map(file => file.filename);
+            });
         }
-    });
-}
-function run() {
-    return __awaiter(this, void 0, void 0, function* () {
+        function partOfApp(changedFiles, app) {
+            const sourcePath = path_1.default.normalize(app.spec.source.path);
+            const appPath = getFirstTwoDirectories(sourcePath);
+            return changedFiles.some(file => {
+                const normalizedFilePath = path_1.default.normalize(file);
+                return normalizedFilePath.startsWith(appPath);
+            });
+        }
+        function getFirstTwoDirectories(filePath) {
+            const normalizedPath = path_1.default.normalize(filePath);
+            const parts = normalizedPath.split(path_1.default.sep).filter(Boolean); // filter(Boolean) removes empty strings
+            if (parts.length < 2) {
+                return parts.join(path_1.default.sep); // Return the entire path if less than two directories
+            }
+            return parts.slice(0, 2).join(path_1.default.sep);
+        }
+        function asyncForEach(array, callback) {
+            return __awaiter(this, void 0, void 0, function* () {
+                for (let index = 0; index < array.length; index++) {
+                    yield callback(array[index], index, array);
+                }
+            });
+        }
         const argocd = yield setupArgoCDCommand();
         const apps = yield getApps();
         core.info(`Found apps: ${apps.map(a => a.metadata.name).join(', ')}`);
@@ -298,23 +310,22 @@ function filterDiff(diffText) {
     // Split the diff text into sections based on the headers
     const sections = diffText.split(/(?=^===== )/m);
     const filteredSection = sections
-        .map(section => {
-        return section
-            .replace(/(\d+(,\d+)?c\d+(,\d+)?\n)?<\s+argocd\.argoproj\.io\/instance:.*\n---\n>\s+argocd\.argoproj\.io\/instance:.*\n?/g, '')
-            .trim()
-            .replace(/(\d+(,\d+)?c\d+(,\d+)?\n)?<\s+app.kubernetes.io\/part-of:.*\n?/g, '')
-            .trim();
-    })
-        .filter(section => section.trim() !== '');
-    const removeEmptyHeaders = filteredSection.filter(entry => {
-        // Remove empty strings and sections that are just headers with line numbers
-        return !entry.match(/^===== .*\/.* ======$/);
-    });
+        .map(section => section
+        .replace(/(\d+(,\d+)?c\d+(,\d+)?\n)?<\s+argocd\.argoproj\.io\/instance:.*\n---\n>\s+argocd\.argoproj\.io\/instance:.*\n?/g, '')
+        .trim()
+        .replace(/(\d+(,\d+)?c\d+(,\d+)?\n)?<\s+app.kubernetes.io\/part-of:.*\n?/g, '')
+        .trim())
+        .filter(section => section !== '');
+    // Remove empty strings and sections that are just headers with line numbers
+    const removeEmptyHeaders = filteredSection.filter(entry => !entry.match(/^===== .*\/.* ======$/));
     // Join the filtered sections back together
     return removeEmptyHeaders.join('\n').trim();
 }
-// eslint-disable-next-line github/no-then
-run().catch(e => core.setFailed(e.message));
+// Avoid executing main automatically during tests
+if (require.main === require.cache[eval('__filename')]) {
+    // eslint-disable-next-line github/no-then
+    run().catch(e => core.setFailed(e.message));
+}
 
 
 /***/ }),

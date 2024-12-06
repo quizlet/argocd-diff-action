@@ -30,7 +30,10 @@ jobs:
           argocd-token: ${{ secrets.ARGOCD_TOKEN }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           argocd-version: v1.6.1
-          argocd-extra-cli-args: --grpc-web
+          argocd-extra-cli-args: --grpc-web # optional
+          app-name-matcher: "/^myapp-/" # optional
+          plaintext: true # optional
+          environment: myenv # optional
 ```
 
 ## How it works
