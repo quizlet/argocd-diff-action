@@ -237,13 +237,13 @@ async function getChangedFiles(): Promise<string[]> {
   const { owner, repo } = github.context.repo;
   const pull_number = github.context.issue.number;
 
-  const listFilesResponse = await octokit.rest.pulls.listFiles({
+  const listFilesResponse = await octokit.paginate(octokit.rest.pulls.listFiles, {
     owner,
     repo,
     pull_number
   });
 
-  const changedFiles = listFilesResponse.data.map(file => file.filename);
+  const changedFiles = listFilesResponse.map(file => file.filename);
   return changedFiles;
 }
 
