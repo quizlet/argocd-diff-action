@@ -150,8 +150,15 @@ async function postDiffComment(diffs: Diff[]): Promise<void> {
   }).filter(d => d.diff !== '');
 
   const prefixHeader = `## ArgoCD Diff on ${ENV}`
-  const diffOutput = filteredDiffs.map(
-    ({ app, diff, error }) => `
+  let diffOutput = filteredDiffs.map(
+    ({ app, diff, error }) => {
+      let cutOff = false;
+      if (diff.length >= 60000) {
+        diff = diff.slice(0, 60000);
+        cutOff = true;
+      }
+
+      return `
 App: [\`${app.metadata.name}\`](${protocol}://${ARGOCD_SERVER_URL}/applications/${app.metadata.name})
 YAML generation: ${error ? ' Error 🛑' : 'Success 🟢'}
 App sync status: ${app.status.sync.status === 'Synced' ? 'Synced ✅' : 'Out of Sync ⚠️ '}
@@ -166,6 +173,13 @@ ${error.stderr}
 \`\`\`json
 ${JSON.stringify(error.err)}
 \`\`\`
+`
+        : ''
+      }
+
+${cutOff
+        ? `
+**Diff truncated to 60kB**
 `
         : ''
       }
@@ -190,12 +204,13 @@ ${diff}
       }
 ---
 `
-  );
+    }
+  ).join('\n');
 
   const output = scrubSecrets(`
 ${prefixHeader} for commit [\`${shortCommitSha}\`](${commitLink})
 _Updated at ${new Date().toLocaleString(TIMEZONE_LOCALE, { timeZone: TIMEZONE })} PT_
-  ${diffOutput.join('\n')}
+  ${diffOutput}
 
 | Legend | Status |
 | :---:  | :---   |
