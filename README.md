@@ -1,5 +1,10 @@
 # ArgoCD Diff GitHub Action
 
+![](https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/Warning.svg/156px-Warning.svg.png) | This project is no longer supported.
+|---|---|
+
+> **IMPORTANT NOTE:** As of 2025, this action has been deprecated and is no longer being actively maintained. Please see https://github.com/argocd-diff-action/argocd-diff-action for a popular and actively maintained fork of this action.
+
 This action generates a diff between the current PR and the current state of the cluster. 
 
 Note that this includes any changes between your branch and latest `master`, as well as ways in which the cluster is out of sync. 
