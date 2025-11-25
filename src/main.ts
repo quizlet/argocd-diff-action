@@ -50,7 +50,6 @@ export function filterAppsByName(appsAffected: App[], appNameMatcher: string): A
 export async function run(): Promise<void> {
   const ARCH = process.env.ARCH || 'linux';
   const githubToken = core.getInput('github-token');
-  core.info(githubToken);
 
   const ARGOCD_SERVER_URL = core.getInput('argocd-server-url');
   const ARGOCD_TOKEN = core.getInput('argocd-token');
