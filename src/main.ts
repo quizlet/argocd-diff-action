@@ -282,7 +282,7 @@ _Updated at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angele
   const diffs: Diff[] = [];
 
   await asyncForEach(apps, async app => {
-    const command = `app diff ${app.metadata.name} --local=${app.spec.source.path}`;
+    const command = `app diff ${app.metadata.name} --local-repo-root=${process.cwd()} --local=${app.spec.source.path}`;
     try {
       core.info(`Running: argocd ${command}`);
       // ArgoCD app diff will exit 1 if there is a diff, so always catch,
